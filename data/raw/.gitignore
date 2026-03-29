@@ -1,0 +1,5 @@
+/images
+/test_images
+/segmentations
+/HAM10000_metadata.csv
+/ISIC2018_Task3_Test_GroundTruth.csv

@@ -1,0 +1,5 @@
+outs:
+- md5: 2b5663aacc9644740f27e355cf7f369a
+  size: 108383
+  hash: md5
+  path: ISIC2018_Task3_Test_GroundTruth.csv
