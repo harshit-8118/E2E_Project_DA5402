@@ -1,0 +1,4 @@
+[core]
+    remote = origin
+['remote "origin"']
+    url = https://dagshub.com/harshit-8118/E2E_Project_DA5402.dvc
