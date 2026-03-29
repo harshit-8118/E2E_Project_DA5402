@@ -1,0 +1,50 @@
+stages:
+  prepare:
+    cmd: python src/data_proc/prepare.py
+    deps:
+      - src/data_proc/prepare.py
+      - data/raw/HAM10000_metadata.csv
+      - data/raw/images/part_1
+      - data/raw/images/part_2
+      - data/raw/test_images
+      - data/raw/ISIC2018_Task3_Test_GroundTruth.csv
+    params:
+      - prepare
+    outs:
+      - data/processed/train.csv
+      - data/processed/val.csv
+      - data/processed/test.csv
+    metrics:
+      - data/reports/prepare_summary.json:
+          cache: false
+      - data/reports/baseline_stats.json:
+          cache: false
+
+  train:
+    cmd: python src/models/train.py
+    deps:
+      - src/models/train.py
+      - src/models/model.py
+      - data/augmented/augmented_manifest.csv
+      - data/processed/val.csv
+    params:
+      - train
+    outs:
+      - outputs/models/best_model.pth
+    metrics:
+      - outputs/metrics/train_metrics.json:
+          cache: false
+
+  evaluate:
+    cmd: python src/models/evaluate.py
+    deps:
+      - src/models/evaluate.py
+      - outputs/models/best_model.pth
+      - data/processed/test.csv
+    params:
+      - evaluate
+    metrics:
+      - outputs/metrics/eval_metrics.json:
+          cache: false
+    plots:
+      - outputs/plots/confusion_matrix.png

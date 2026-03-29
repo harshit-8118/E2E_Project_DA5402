@@ -1,0 +1,92 @@
+category,source,metric,value
+image_folder,part_1,count,5000
+image_folder,part_1,max_width,600
+image_folder,part_1,min_width,600
+image_folder,part_1,max_height,450
+image_folder,part_1,min_height,450
+image_folder,part_1,unique_resolutions,1
+image_folder,part_1,all_same_size,Yes
+image_folder,part_1,common_resolution,"(600, 450)"
+image_folder,part_1,avg_file_size_kb,266.89
+image_folder,part_1,max_file_size_kb,448.41
+image_folder,part_1,min_file_size_kb,96.03
+image_folder,part_1,total_size_mb,1303.17
+image_folder,part_2,count,5015
+image_folder,part_2,max_width,600
+image_folder,part_2,min_width,600
+image_folder,part_2,max_height,450
+image_folder,part_2,min_height,450
+image_folder,part_2,unique_resolutions,1
+image_folder,part_2,all_same_size,Yes
+image_folder,part_2,common_resolution,"(600, 450)"
+image_folder,part_2,avg_file_size_kb,273.35
+image_folder,part_2,max_file_size_kb,479.27
+image_folder,part_2,min_file_size_kb,83.33
+image_folder,part_2,total_size_mb,1338.71
+image_folder,test_images,count,1511
+image_folder,test_images,max_width,600
+image_folder,test_images,min_width,600
+image_folder,test_images,max_height,450
+image_folder,test_images,min_height,450
+image_folder,test_images,unique_resolutions,1
+image_folder,test_images,all_same_size,Yes
+image_folder,test_images,common_resolution,"(600, 450)"
+image_folder,test_images,avg_file_size_kb,271.62
+image_folder,test_images,max_file_size_kb,423.8
+image_folder,test_images,min_file_size_kb,117.96
+image_folder,test_images,total_size_mb,400.81
+image_folder,segmentations,count,10015
+image_folder,segmentations,max_width,600
+image_folder,segmentations,min_width,600
+image_folder,segmentations,max_height,450
+image_folder,segmentations,min_height,450
+image_folder,segmentations,unique_resolutions,1
+image_folder,segmentations,all_same_size,Yes
+image_folder,segmentations,common_resolution,"(600, 450)"
+image_folder,segmentations,avg_file_size_kb,1.07
+image_folder,segmentations,max_file_size_kb,3.17
+image_folder,segmentations,min_file_size_kb,0.44
+image_folder,segmentations,total_size_mb,10.46
+metadata,train_metadata,rows,10015
+metadata,train_metadata,columns,8
+metadata,train_metadata,missing_values,57
+metadata,train_metadata,classes,7
+metadata,train_metadata,class_distribution,"{'nv': 6705, 'mel': 1113, 'bkl': 1099, 'bcc': 514, 'akiec': 327, 'vasc': 142, 'df': 115}"
+metadata,train_metadata,majority_class,nv
+metadata,train_metadata,minority_class,df
+metadata,train_metadata,imbalance_ratio,58.3
+metadata,train_metadata,age_missing,57
+metadata,train_metadata,age_mean,51.86
+metadata,train_metadata,age_min,0.0
+metadata,train_metadata,age_max,85.0
+metadata,train_metadata,sex_distribution,"{'male': 5406, 'female': 4552, 'unknown': 57}"
+metadata,train_metadata,unique_localizations,15
+metadata,train_metadata,top_localization,back
+metadata,train_metadata,dx_type_distribution,"{'histo': 5340, 'follow_up': 3704, 'consensus': 902, 'confocal': 69}"
+metadata,train_metadata,biopsy_confirmed_pct,53.32
+metadata,train_metadata,unique_lesions,7470
+metadata,train_metadata,duplicate_lesion_images,2545
+metadata,test_metadata,rows,1512
+metadata,test_metadata,columns,8
+metadata,test_metadata,missing_values,285
+metadata,test_metadata,age_missing,282
+metadata,test_metadata,age_mean,50.81
+metadata,test_metadata,age_min,0.0
+metadata,test_metadata,age_max,90.0
+metadata,test_metadata,sex_distribution,"{'male': 655, 'female': 562, 'unknown': 294}"
+metadata,test_metadata,unique_localizations,14
+metadata,test_metadata,top_localization,unknown
+metadata,test_metadata,dx_type_distribution,"{'histo': 786, 'follow_up': 458, 'consensus': 261, 'confocal': 7}"
+metadata,test_metadata,biopsy_confirmed_pct,51.98
+metadata,test_metadata,unique_lesions,1223
+metadata,test_metadata,duplicate_lesion_images,289
+metadata,test_metadata,rows_after_drop,1511
+metadata,test_metadata,known_missing,['ISIC_0035068']
+file_check,dataset,Part 1 images,5000 | OK
+file_check,dataset,Part 2 images,5015 | OK
+file_check,dataset,Train metadata rows,10015 | OK
+file_check,dataset,Train missing images,0 | OK
+file_check,dataset,Test images on disk,1511 | OK
+file_check,dataset,Test metadata raw,1512 | WARN
+file_check,dataset,Test metadata clean,1511 | OK
+file_check,dataset,Known missing test imgs,1 | ['ISIC_0035068']

@@ -1,0 +1,66 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python src/data_proc/prepare.py
+    deps:
+    - path: data/raw/HAM10000_metadata.csv
+      hash: md5
+      md5: 8f85fb1aa29d80a2797247e434deb79d
+      size: 690218
+    - path: data/raw/ISIC2018_Task3_Test_GroundTruth.csv
+      hash: md5
+      md5: 2b5663aacc9644740f27e355cf7f369a
+      size: 108383
+    - path: data/raw/images/part_1
+      hash: md5
+      md5: 01a89bb64a46a25acc69748634b7bc97.dir
+      size: 1366471277
+      nfiles: 5000
+    - path: data/raw/images/part_2
+      hash: md5
+      md5: 9c7bb15bc571aeb8d781ff0fe1210716.dir
+      size: 1403744282
+      nfiles: 5015
+    - path: data/raw/test_images
+      hash: md5
+      md5: acd00d301cf9dc9073af470e26c235a3.dir
+      size: 420381104
+      nfiles: 1512
+    - path: src/data_proc/prepare.py
+      hash: md5
+      md5: 357318ab1095570815a825a42327165c
+      size: 6910
+    params:
+      params.yaml:
+        prepare:
+          val_size: 0.15
+          test_size: 0.15
+          random_seed: 42
+          image_dir_part1: data/raw/images/part_1
+          image_dir_part2: data/raw/images/part_2
+          metadata_path: data/raw/HAM10000_metadata.csv
+          test_metadata_path: data/raw/ISIC2018_Task3_Test_GroundTruth.csv
+          test_images_dir: data/raw/test_images
+          known_missing_test:
+          - ISIC_0035068
+    outs:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 66d67c8b63685f1f44eba1672ee26ab2
+      size: 106486
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 5aeaa75bbff047edde3462b03dc0d063
+      size: 582652
+    - path: data/processed/val.csv
+      hash: md5
+      md5: f41ba0852afb4cfe3cb676b5c305e963
+      size: 102431
+    - path: data/reports/baseline_stats.json
+      hash: md5
+      md5: 11a796468df849b26b8e2b67775180fd
+      size: 337
+    - path: data/reports/prepare_summary.json
+      hash: md5
+      md5: 59521a5dc8db06643ce8ee9da4c2e371
+      size: 546

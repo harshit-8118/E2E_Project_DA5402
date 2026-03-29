@@ -1,0 +1,34 @@
+{
+  "train_size": 8518,
+  "val_size": 1497,
+  "test_size": 1511,
+  "train_distribution": {
+    "akiec": 276,
+    "bcc": 437,
+    "bkl": 942,
+    "df": 93,
+    "mel": 945,
+    "nv": 5705,
+    "vasc": 120
+  },
+  "val_distribution": {
+    "akiec": 51,
+    "bcc": 77,
+    "bkl": 157,
+    "df": 22,
+    "mel": 168,
+    "nv": 1000,
+    "vasc": 22
+  },
+  "test_distribution": {
+    "akiec": 43,
+    "bcc": 93,
+    "bkl": 217,
+    "df": 44,
+    "mel": 171,
+    "nv": 908,
+    "vasc": 35
+  },
+  "unique_train_lesions": 6349,
+  "unique_val_lesions": 1121
+}

@@ -1,0 +1,32 @@
+prepare:
+  val_size: 0.15
+  test_size: 0.15        # uses ISIC test set, so this is just for reference
+  random_seed: 42
+  image_dir_part1: data/raw/images/part_1
+  image_dir_part2: data/raw/images/part_2
+  metadata_path: data/raw/HAM10000_metadata.csv
+  test_metadata_path: data/raw/ISIC2018_Task3_Test_GroundTruth.csv
+  test_images_dir: data/raw/test_images
+  known_missing_test:
+    - ISIC_0035068
+
+train:
+  model_name: efficientnet_b3   # or convnext_small
+  pretrained: true
+  num_classes: 7
+  epochs: 30
+  batch_size: 32
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  frozen_layers: 0              # 0 = fine-tune all layers
+  image_size: 224
+  num_workers: 4
+  early_stopping_patience: 7
+  scheduler: cosine             # cosine or step
+  use_weighted_loss: true       # handle class imbalance
+  random_seed: 42
+  device: cuda
+
+evaluate:
+  acceptance_macro_f1: 0.60    # minimum to register model
+  model_path: outputs/models/best_model.pth

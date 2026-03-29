@@ -1,0 +1,9 @@
+check,count,status
+Part 1 images,5000,OK
+Part 2 images,5015,OK
+Train metadata rows,10015,OK
+Train missing images,0,OK
+Test images on disk,1511,OK
+Test metadata raw,1512,WARN
+Test metadata clean,1511,OK
+Known missing test imgs,1,['ISIC_0035068']

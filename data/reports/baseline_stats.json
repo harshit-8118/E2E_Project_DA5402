@@ -1,0 +1,21 @@
+{
+  "class_distribution": {
+    "akiec": 276,
+    "bcc": 437,
+    "bkl": 942,
+    "df": 93,
+    "mel": 945,
+    "nv": 5705,
+    "vasc": 120
+  },
+  "total_train_samples": 8518,
+  "class_weights": {
+    "akiec": 4.4089,
+    "bcc": 2.7846,
+    "bkl": 1.2918,
+    "df": 13.0845,
+    "mel": 1.2877,
+    "nv": 0.2133,
+    "vasc": 10.1405
+  }
+}

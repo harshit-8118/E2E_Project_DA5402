@@ -1,0 +1,5 @@
+folder,count,max_width,min_width,max_height,min_height,unique_resolutions,all_same_size,common_resolution,avg_file_size_kb,max_file_size_kb,min_file_size_kb,total_size_mb
+part_1,5000,600,600,450,450,1,Yes,"(600, 450)",266.89,448.41,96.03,1303.17
+part_2,5015,600,600,450,450,1,Yes,"(600, 450)",273.35,479.27,83.33,1338.71
+test_images,1511,600,600,450,450,1,Yes,"(600, 450)",271.62,423.8,117.96,400.81
+segmentations,10015,600,600,450,450,1,Yes,"(600, 450)",1.07,3.17,0.44,10.46
