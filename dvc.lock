@@ -34,15 +34,12 @@ stages:
       params.yaml:
         prepare:
           val_size: 0.15
-          test_size: 0.15
           random_seed: 42
           image_dir_part1: data/raw/images/part_1
           image_dir_part2: data/raw/images/part_2
           metadata_path: data/raw/HAM10000_metadata.csv
           test_metadata_path: data/raw/ISIC2018_Task3_Test_GroundTruth.csv
           test_images_dir: data/raw/test_images
-          known_missing_test:
-          - ISIC_0035068
     outs:
     - path: data/processed/test.csv
       hash: md5
