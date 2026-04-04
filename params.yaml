@@ -6,3 +6,22 @@ prepare:
   metadata_path: data/raw/HAM10000_metadata.csv
   test_metadata_path: data/raw/ISIC2018_Task3_Test_GroundTruth.csv
   test_images_dir: data/raw/test_images
+
+train:
+  device: cuda
+  pretrained: true
+  epochs: 50
+  model_name: convnext_small # convnext_small, resnet_50, efficientnet_b3
+  num_classes: 7
+  early_stopping_patience: 15
+  scheduler: cosine
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  use_weighted_loss: true
+  batch_size: 64
+  num_workers: 4
+  image_size: 336
+
+evaluate:
+  acceptance_macro_f1: 0.60    # minimum to register model
+  model_path: outputs/models/best_model.pth

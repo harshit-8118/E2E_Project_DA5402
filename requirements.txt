@@ -5,4 +5,9 @@ matplotlib
 seaborn
 pyyaml 
 pillow
+torch
+torchvision
+mlflow 
+python-dotenv
+grad-cam
 tqdm 
