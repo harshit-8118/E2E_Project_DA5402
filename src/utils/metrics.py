@@ -26,6 +26,19 @@ def compute_metrics(y_true: list, y_pred: list) -> dict:
         "micro_recall"  : round(recall_score(y_true, y_pred, average="micro",        zero_division=0), 4),
     }
 
+def compute_metrics(y_true: list, y_pred: list) -> dict:
+    return {
+        "accuracy"           : round(accuracy_score(y_true, y_pred), 4),
+        "macro_f1"           : round(f1_score(y_true, y_pred, average="macro",    zero_division=0), 4),
+        "micro_f1"           : round(f1_score(y_true, y_pred, average="micro",    zero_division=0), 4),
+        "weighted_f1"        : round(f1_score(y_true, y_pred, average="weighted", zero_division=0), 4),
+        "macro_precision"    : round(precision_score(y_true, y_pred, average="macro",    zero_division=0), 4),
+        "micro_precision"    : round(precision_score(y_true, y_pred, average="micro",    zero_division=0), 4),
+        "weighted_precision" : round(precision_score(y_true, y_pred, average="weighted", zero_division=0), 4),
+        "macro_recall"       : round(recall_score(y_true, y_pred, average="macro",    zero_division=0), 4),
+        "micro_recall"       : round(recall_score(y_true, y_pred, average="micro",    zero_division=0), 4),
+        "weighted_recall"    : round(recall_score(y_true, y_pred, average="weighted", zero_division=0), 4),
+    }
 
 def compute_per_class_f1(y_true: list, y_pred: list, classes: list) -> dict:
     """Per class F1 score — logged individually to MLflow."""

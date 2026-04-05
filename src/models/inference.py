@@ -62,6 +62,7 @@ def generate_gradcam_samples(model, dataset, label_to_idx, device, save_dir: str
     target_layer = get_target_layer(model, tp["model_name"])
     cam = GradCAM(model=model, target_layers=[target_layer])
 
+    img_size = tp['image_size']
     # collect sample indices per class
     df = dataset.df
     for cls_name, cls_idx in label_to_idx.items():
@@ -69,7 +70,7 @@ def generate_gradcam_samples(model, dataset, label_to_idx, device, save_dir: str
         for i, (_, row) in enumerate(samples.iterrows()):
             try:
                 # load original image for overlay
-                orig_img = np.array(Image.open(row["image_path"]).convert("RGB").resize((224, 224)))
+                orig_img = np.array(Image.open(row["image_path"]).convert("RGB").resize((img_size, img_size)))
                 orig_img = orig_img.astype(np.float32) / 255.0
 
                 # prepare tensor
@@ -108,6 +109,13 @@ def main():
     model = build_model(tp["model_name"], tp["num_classes"], pretrained=False)
     model.load_state_dict(torch.load(ep["model_path"], map_location=device))
     model = model.to(device)
+
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+
+    allocated_before = torch.cuda.memory_allocated() / 1024**3
+    print(f"Before training: {allocated_before:.2f} GB allocated")
+
     model.eval()
     logger.info(f"Loaded model from {ep['model_path']}")
 
@@ -165,24 +173,28 @@ def main():
     # ── mlflow logging ─────────────────────────────────────────────────────────
     setup_mlflow("skin-disease-detection")
 
-    # resume the same run from train.py
     run_id_path = "outputs/metrics/mlflow_run_id.txt"
     run_id      = open(run_id_path).read().strip() if os.path.exists(run_id_path) else None
 
     with mlflow.start_run(run_id=run_id):
         log_tags(tp["model_name"], stage="evaluation")
 
-        # overall metrics
+        # ── overall metrics — all of them ──────────────────────────────────────
         mlflow.log_metrics({
-            "test_accuracy"    : overall["accuracy"],
-            "test_macro_f1"    : overall["macro_f1"],
-            "test_weighted_f1" : overall["weighted_f1"],
-            "test_macro_precision": overall["macro_precision"],
-            "test_macro_recall": overall["macro_recall"],
+            "test_accuracy"          : overall["accuracy"],
+            "test_macro_f1"          : overall["macro_f1"],
+            "test_micro_f1"          : overall["micro_f1"],
+            "test_weighted_f1"       : overall["weighted_f1"],
+            "test_macro_precision"   : overall["macro_precision"],
+            "test_micro_precision"   : overall["micro_precision"],
+            "test_weighted_precision": overall["weighted_precision"],
+            "test_macro_recall"      : overall["macro_recall"],
+            "test_micro_recall"      : overall["micro_recall"],
+            "test_weighted_recall"   : overall["weighted_recall"],
         })
 
         # per class f1
-        log_per_class_metrics(per_class_f1,  prefix="test_f1")
+        log_per_class_metrics(per_class_f1, prefix="test_f1")
 
         # per class mistake %
         log_per_class_metrics(mistake_pct, prefix="test_mistake_pct")
@@ -192,18 +204,42 @@ def main():
         mlflow.log_artifact("outputs/metrics/eval_metrics.json")
         mlflow.log_artifacts("outputs/plots/gradcam", artifact_path="gradcam")
 
-        # ── register model if acceptance criterion met ─────────────────────────
+        # log classification report as text artifact
+        report_path = "outputs/metrics/classification_report.txt"
+        with open(report_path, "w") as f:
+            f.write(report)
+        mlflow.log_artifact(report_path)
+
+        # ── model registration inside same run — no end_run() ─────────────────
         if overall["macro_f1"] >= ep["acceptance_macro_f1"]:
             logger.info(f"F1 {overall['macro_f1']} >= {ep['acceptance_macro_f1']} — registering model")
-            # model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
 
-            # log model properly for registry
             mlflow.pytorch.log_model(
                 pytorch_model=model,
-                artifact_path="model",
-                registered_model_name="skin-disease-classifier"
+                name="model",
+                registered_model_name="skin-disease-classifier",
+                pip_requirements=[
+                    f"torch=={torch.__version__}",
+                    "torchvision",
+                    "Pillow",
+                    "numpy",
+                ]
             )
-            logger.info("Model registered: skin-disease-classifier")
+
+            # transition to production
+            from mlflow.tracking import MlflowClient
+            client  = MlflowClient()
+            version = client.get_latest_versions(
+                "skin-disease-classifier", stages=["None"]
+            )[0].version
+
+            client.transition_model_version_stage(
+                name="skin-disease-classifier",
+                version=version,
+                stage="Production",
+                archive_existing_versions=True
+            )
+            logger.info(f"Model v{version} transitioned to Production")
         else:
             logger.warning(
                 f"F1 {overall['macro_f1']} < {ep['acceptance_macro_f1']} — model NOT registered"

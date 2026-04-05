@@ -1,7 +1,7 @@
 schema: '2.0'
 stages:
   prepare:
-    cmd: python src/data_proc/prepare.py
+    cmd: python3 -m src.data_proc.prepare
     deps:
     - path: data/raw/HAM10000_metadata.csv
       hash: md5
@@ -61,3 +61,165 @@ stages:
       hash: md5
       md5: 59521a5dc8db06643ce8ee9da4c2e371
       size: 546
+  train:
+    cmd: python3 -m src.models.train
+    deps:
+    - path: data/processed/train.csv
+      hash: md5
+      md5: 5aeaa75bbff047edde3462b03dc0d063
+      size: 582652
+    - path: data/processed/val.csv
+      hash: md5
+      md5: f41ba0852afb4cfe3cb676b5c305e963
+      size: 102431
+    - path: data/reports/baseline_stats.json
+      hash: md5
+      md5: 11a796468df849b26b8e2b67775180fd
+      size: 337
+    - path: src/models/model.py
+      hash: md5
+      md5: 0105cc1b88f2de30aa87ddaed368dfcf
+      size: 2678
+    - path: src/models/train.py
+      hash: md5
+      md5: c1a465c335dc1b0fba1808e132b37b73
+      size: 11985
+    - path: src/utils/logger.py
+      hash: md5
+      md5: 1b1adf91dbed411db814d87ac15e8c1f
+      size: 834
+    - path: src/utils/metrics.py
+      hash: md5
+      md5: c77c2a558d621b631568a2e4e99d7523
+      size: 3792
+    - path: src/utils/mlflow_utils.py
+      hash: md5
+      md5: 6e57f705cfc5b8b93ea6abec4c228285
+      size: 2714
+    - path: src/utils/reproducibility.py
+      hash: md5
+      md5: 2b43e805b12bf78d8946f589ce27ea33
+      size: 964
+    params:
+      params.yaml:
+        prepare:
+          val_size: 0.15
+          random_seed: 42
+          image_dir_part1: data/raw/images/part_1
+          image_dir_part2: data/raw/images/part_2
+          metadata_path: data/raw/HAM10000_metadata.csv
+          test_metadata_path: data/raw/ISIC2018_Task3_Test_GroundTruth.csv
+          test_images_dir: data/raw/test_images
+        train:
+          device: cuda
+          pretrained: true
+          epochs: 50
+          model_name: efficientnet_b3
+          num_classes: 7
+          early_stopping_patience: 15
+          scheduler: cosine
+          learning_rate: 0.0001
+          weight_decay: 0.0
+          use_weighted_loss: true
+          batch_size: 64
+          num_workers: 4
+          image_size: 336
+          random_seed: 42
+          mixup_alpha: 0.1
+          cutmix_alpha: 0.0
+          label_smoothing: 0.0
+          use_amp: true
+    outs:
+    - path: outputs/metrics/mlflow_run_id.txt
+      hash: md5
+      md5: 4de8de71931bf11226ea62d4246e9847
+      size: 32
+    - path: outputs/metrics/train_history.json
+      hash: md5
+      md5: 9385458a527f2f14fdca78804eb7b0fa
+      size: 6373
+    - path: outputs/models/best_model.pth
+      hash: md5
+      md5: 7ab6187dcce7de65caffc018abb0e319
+      size: 43384636
+  evaluate:
+    cmd: python3 -m src.models.inference
+    deps:
+    - path: data/processed/test.csv
+      hash: md5
+      md5: 66d67c8b63685f1f44eba1672ee26ab2
+      size: 106486
+    - path: outputs/metrics/mlflow_run_id.txt
+      hash: md5
+      md5: 4de8de71931bf11226ea62d4246e9847
+      size: 32
+    - path: outputs/models/best_model.pth
+      hash: md5
+      md5: 7ab6187dcce7de65caffc018abb0e319
+      size: 43384636
+    - path: src/models/inference.py
+      hash: md5
+      md5: a4a173cd49a6b373f06e85a9ddcd00d2
+      size: 10910
+    - path: src/models/model.py
+      hash: md5
+      md5: 0105cc1b88f2de30aa87ddaed368dfcf
+      size: 2678
+    - path: src/models/train.py
+      hash: md5
+      md5: c1a465c335dc1b0fba1808e132b37b73
+      size: 11985
+    - path: src/utils/logger.py
+      hash: md5
+      md5: 1b1adf91dbed411db814d87ac15e8c1f
+      size: 834
+    - path: src/utils/metrics.py
+      hash: md5
+      md5: c77c2a558d621b631568a2e4e99d7523
+      size: 3792
+    - path: src/utils/mlflow_utils.py
+      hash: md5
+      md5: 6e57f705cfc5b8b93ea6abec4c228285
+      size: 2714
+    - path: src/utils/reproducibility.py
+      hash: md5
+      md5: 2b43e805b12bf78d8946f589ce27ea33
+      size: 964
+    params:
+      params.yaml:
+        evaluate:
+          acceptance_macro_f1: 0.7
+          model_path: outputs/models/best_model.pth
+        train:
+          device: cuda
+          pretrained: true
+          epochs: 50
+          model_name: efficientnet_b3
+          num_classes: 7
+          early_stopping_patience: 15
+          scheduler: cosine
+          learning_rate: 0.0001
+          weight_decay: 0.0
+          use_weighted_loss: true
+          batch_size: 64
+          num_workers: 4
+          image_size: 336
+          random_seed: 42
+          mixup_alpha: 0.1
+          cutmix_alpha: 0.0
+          label_smoothing: 0.0
+          use_amp: true
+    outs:
+    - path: outputs/metrics/eval_metrics.json
+      hash: md5
+      md5: 0abbc311432cf4aeacc66ce057ba1772
+      size: 579
+    - path: outputs/plots/confusion_matrix.png
+      hash: md5
+      md5: 71e8c218e972bc122e94abd0d1f86c9e
+      size: 39256
+    - path: outputs/plots/gradcam
+      hash: md5
+      md5: 6edec1010619083dc854d45399c23829.dir
+      size: 1872209
+      nfiles: 14

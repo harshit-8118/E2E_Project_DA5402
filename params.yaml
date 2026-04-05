@@ -11,7 +11,7 @@ train:
   device: cuda
   pretrained: true
   epochs: 50
-  model_name: convnext_small # convnext_small, resnet_50, efficientnet_b3
+  model_name: efficientnet_b3 # convnext_small, resnet_50, efficientnet_b3
   num_classes: 7
   early_stopping_patience: 15
   scheduler: cosine
@@ -22,7 +22,11 @@ train:
   num_workers: 4
   image_size: 336
   random_seed: 42
+  mixup_alpha: 0.1
+  cutmix_alpha: 0.0
+  label_smoothing: 0.0
+  use_amp: true
 
 evaluate:
-  acceptance_macro_f1: 0.60    # minimum to register model
+  acceptance_macro_f1: 0.70    # minimum to register model
   model_path: outputs/models/best_model.pth

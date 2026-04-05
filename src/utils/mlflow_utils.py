@@ -4,6 +4,7 @@
 import os
 import subprocess
 import mlflow
+from mlflow.tracking import MlflowClient
 from dotenv import load_dotenv
 from src.utils.logger import get_logger
 
@@ -68,3 +69,22 @@ def log_per_class_metrics(metrics_dict: dict, prefix: str, step: int = None):
             mlflow.log_metric(key, value, step=step)
         else:
             mlflow.log_metric(key, value)
+
+
+def delete_mlflow_registry():
+    mlflow.set_tracking_uri(uri=uri)
+
+    client = MlflowClient()
+
+    # delete all versions first — required before deleting model
+    versions = client.search_model_versions("name='skin-disease-classifier'")
+    for v in versions:
+        client.delete_model_version(
+            name="skin-disease-classifier",
+            version=v.version
+        )
+        print(f"Deleted version {v.version}")
+
+    # then delete the registered model itself
+    client.delete_registered_model(name="skin-disease-classifier")
+    print("Model registry deleted")

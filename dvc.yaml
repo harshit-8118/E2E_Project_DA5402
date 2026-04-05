@@ -1,6 +1,6 @@
 stages:
   prepare:
-    cmd: python src/data_proc/prepare.py
+    cmd: python3 -m src.data_proc.prepare
     deps:
       - src/data_proc/prepare.py
       - data/raw/HAM10000_metadata.csv
@@ -21,12 +21,14 @@ stages:
           cache: false
 
   train:
-    cmd: python -m src.models.train
+    cmd: python3 -m src.models.train
     deps:
       - src/models/train.py
       - src/models/model.py
       - src/utils/mlflow_utils.py
       - src/utils/metrics.py
+      - src/utils/reproducibility.py  
+      - src/utils/logger.py
       - data/processed/train.csv
       - data/processed/val.csv
       - data/reports/baseline_stats.json
@@ -38,12 +40,21 @@ stages:
     metrics:
       - outputs/metrics/train_history.json:
           cache: false
+      - outputs/metrics/mlflow_run_id.txt:
+          cache: false
 
   evaluate:
-    cmd: python -m src.models.inference
+    cmd: python3 -m src.models.inference
     deps:
       - src/models/inference.py
+      - src/models/model.py                
+      - src/models/train.py                
+      - src/utils/mlflow_utils.py          
+      - src/utils/metrics.py               
+      - src/utils/reproducibility.py       
+      - src/utils/logger.py                
       - outputs/models/best_model.pth
+      - outputs/metrics/mlflow_run_id.txt  
       - data/processed/test.csv
     params:
       - train
@@ -53,3 +64,6 @@ stages:
           cache: false
     plots:
       - outputs/plots/confusion_matrix.png
+    outs:
+      - outputs/plots/gradcam:       
+          cache: false

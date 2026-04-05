@@ -12,11 +12,13 @@ import mlflow.pytorch
 import numpy as np
 import pandas as pd
 from torch.utils.data import Dataset, DataLoader
+from torch.amp import autocast, GradScaler
 from torchvision import transforms
 from PIL import Image
 from tqdm import tqdm
 
-from model import build_model, load_class_weights
+from src.models.model import build_model, load_class_weights
+from src.models.aug_methods import mixup_data, cutmix_data, mixup_cutmix_criterion
 from src.utils.logger import get_logger
 from src.utils.mlflow_utils import setup_mlflow, log_tags, log_params_from_dict, log_per_class_metrics
 from src.utils.metrics import compute_metrics, compute_per_class_f1, CLASS_NAMES
@@ -97,7 +99,7 @@ class EarlyStopping:
 
 
 # one epoch
-def run_epoch(model, loader, criterion, optimizer, device, is_train: bool):
+def run_epoch(model, loader, criterion, optimizer, device, is_train: bool, scaler: GradScaler, mixup_alpha: float = 0.0, cutmix_alpha: float = 0.0):
     model.train() if is_train else model.eval()
 
     total_loss = 0.0
@@ -107,21 +109,38 @@ def run_epoch(model, loader, criterion, optimizer, device, is_train: bool):
         for images, labels in tqdm(loader, leave=False):
             images, labels = images.to(device), labels.to(device)
 
-            outputs = model(images)
-            loss    = criterion(outputs, labels)
+            use_mixup  = is_train and mixup_alpha > 0 and np.random.rand() < 0.3
+            use_cutmix = is_train and cutmix_alpha > 0 and not use_mixup
+
+            if use_cutmix:
+                images, labels_a, labels_b, lam = cutmix_data(images, labels, cutmix_alpha, device)
+            elif use_mixup:
+                images, labels_a, labels_b, lam = mixup_data(images, labels, mixup_alpha, device)
+
+            # mixed precision forward pass
+            with autocast(device_type="cuda", enabled=(scaler is not None)):
+                outputs = model(images)
+                if use_cutmix or use_mixup:
+                    loss = mixup_cutmix_criterion(criterion, outputs, labels_a, labels_b, lam)
+                else:
+                    loss = criterion(outputs, labels)
 
             if is_train:
                 optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                if scaler is not None:
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
 
             total_loss += loss.item() * images.size(0)
             preds = outputs.argmax(dim=1).cpu().numpy()
             all_preds.extend(preds)
             all_labels.extend(labels.cpu().numpy())
 
-    avg_loss = total_loss / len(loader.dataset)
-    return avg_loss, all_preds, all_labels
+    return total_loss / len(loader.dataset), all_preds, all_labels
 
 
 # main
@@ -159,9 +178,15 @@ def main():
     model = build_model(tp["model_name"], tp["num_classes"], tp["pretrained"])
     model = model.to(device)
 
+    torch.cuda.empty_cache()
+    torch.cuda.reset_peak_memory_stats()
+
+    allocated_before = torch.cuda.memory_allocated() / 1024**3
+    print(f"Before training: {allocated_before:.2f} GB allocated")
+
     # weighted loss — handles class imbalance
     class_weights = load_class_weights("data/reports/baseline_stats.json", CLASS_NAMES, device)
-    criterion     = nn.CrossEntropyLoss(weight=class_weights if tp["use_weighted_loss"] else None)
+    criterion     = nn.CrossEntropyLoss(weight=class_weights if tp["use_weighted_loss"] else None, label_smoothing=tp["label_smoothing"])
 
     optimizer = torch.optim.AdamW(model.parameters(),
                                   lr=tp["learning_rate"],
@@ -179,6 +204,7 @@ def main():
 
     # mlflow run
     setup_mlflow("skin-disease-detection")
+    scaler = GradScaler(device="cuda", enabled=tp["use_amp"])
 
     with mlflow.start_run() as run:
         logger.info(f"MLflow run ID: {run.info.run_id}")
@@ -197,10 +223,10 @@ def main():
         # training loop
         for epoch in range(1, tp["epochs"] + 1):
             train_loss, train_preds, train_labels = run_epoch(
-                model, train_loader, criterion, optimizer, device, is_train=True
+                model, train_loader, criterion, optimizer, device, is_train=True, scaler=scaler, mixup_alpha=tp["mixup_alpha"],cutmix_alpha=tp["cutmix_alpha"]
             )
             val_loss, val_preds, val_labels = run_epoch(
-                model, val_loader, criterion, optimizer, device, is_train=False
+                model, val_loader, criterion, optimizer, device, is_train=False, scaler=scaler, mixup_alpha=0.0, cutmix_alpha=0.0
             )
 
             if scheduler:
