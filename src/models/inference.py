@@ -27,9 +27,9 @@ from src.utils.metrics import (
     compute_per_class_mistake_pct, compute_confusion_matrix,
     get_classification_report, CLASS_NAMES
 )
+from src.utils.reproducibility import set_seed
 
 logger = get_logger("evaluate")
-
 
 def plot_confusion_matrix(cm: np.ndarray, classes: list, save_path: str):
     plt.figure(figsize=(10, 8))
@@ -43,14 +43,23 @@ def plot_confusion_matrix(cm: np.ndarray, classes: list, save_path: str):
     plt.close()
     logger.info(f"Confusion matrix saved: {save_path}")
 
+def get_target_layer(model, model_name: str):
+    if model_name == "efficientnet_b3":
+        return model.features[-1]
+    elif model_name == "convnext_small":
+        return model.features[-1]
+    elif model_name == "resnet50":
+        return model.layer4[-1]
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
 
-def generate_gradcam_samples(model, dataset, label_to_idx, device, save_dir: str, n_per_class: int = 2):
+def generate_gradcam_samples(model, dataset, label_to_idx, device, save_dir: str, n_per_class: int = 2, tp: dict = None):
     """Generate and save GradCAM heatmap samples for each class."""
     os.makedirs(save_dir, exist_ok=True)
     idx_to_label = {v: k for k, v in label_to_idx.items()}
 
     # get target layer for efficientnet
-    target_layer = model.features[-1]
+    target_layer = get_target_layer(model, tp["model_name"])
     cam = GradCAM(model=model, target_layers=[target_layer])
 
     # collect sample indices per class
@@ -89,6 +98,8 @@ def main():
 
     tp = p["train"]
     ep = p["evaluate"]
+
+    set_seed(tp["random_seed"])
 
     device       = torch.device(tp["device"] if torch.cuda.is_available() else "cpu")
     label_to_idx = {cls: i for i, cls in enumerate(CLASS_NAMES)}
@@ -148,7 +159,7 @@ def main():
     # ── gradcam samples ────────────────────────────────────────────────────────
     generate_gradcam_samples(
         model, test_ds, label_to_idx, device,
-        save_dir="outputs/plots/gradcam"
+        save_dir="outputs/plots/gradcam", tp=tp
     )
 
     # ── mlflow logging ─────────────────────────────────────────────────────────
@@ -184,7 +195,7 @@ def main():
         # ── register model if acceptance criterion met ─────────────────────────
         if overall["macro_f1"] >= ep["acceptance_macro_f1"]:
             logger.info(f"F1 {overall['macro_f1']} >= {ep['acceptance_macro_f1']} — registering model")
-            model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
+            # model_uri = f"runs:/{mlflow.active_run().info.run_id}/model"
 
             # log model properly for registry
             mlflow.pytorch.log_model(

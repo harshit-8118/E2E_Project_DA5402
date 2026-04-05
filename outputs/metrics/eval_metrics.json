@@ -1,0 +1,30 @@
+{
+  "accuracy": 0.6248,
+  "weighted_f1": 0.6516,
+  "macro_f1": 0.5751,
+  "micro_f1": 0.6248,
+  "weighted_precision": 0.7604,
+  "macro_precision": 0.5293,
+  "micro_precision": 0.6248,
+  "weighted_recall": 0.6248,
+  "macro_recall": 0.6828,
+  "micro_recall": 0.6248,
+  "per_class_f1": {
+    "akiec": 0.4762,
+    "bcc": 0.6379,
+    "bkl": 0.5338,
+    "df": 0.5545,
+    "mel": 0.4196,
+    "nv": 0.7373,
+    "vasc": 0.6667
+  },
+  "per_class_mistake_pct": {
+    "akiec": 30.23,
+    "bcc": 20.43,
+    "bkl": 29.03,
+    "df": 36.36,
+    "mel": 45.03,
+    "nv": 40.97,
+    "vasc": 20.0
+  }
+}

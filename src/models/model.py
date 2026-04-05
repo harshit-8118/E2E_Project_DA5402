@@ -8,6 +8,13 @@ from src.utils.logger import get_logger
 
 logger = get_logger("model")
 
+def _init_weights(module: nn.Module):
+    """Xavier uniform init for linear layers in classifier head."""
+    if isinstance(module, nn.Linear):
+        nn.init.xavier_uniform_(module.weight)
+        if module.bias is not None:
+            nn.init.zeros_(module.bias)
+
 
 def build_model(model_name: str, num_classes: int, pretrained: bool) -> nn.Module:
     """
@@ -41,6 +48,13 @@ def build_model(model_name: str, num_classes: int, pretrained: bool) -> nn.Modul
 
     else:
         raise ValueError(f"Unsupported model: {model_name}")
+    
+    if model_name == "efficientnet_b3":
+        model.classifier.apply(_init_weights)
+    elif model_name == "convnext_small":
+        model.classifier[2].apply(_init_weights)
+    elif model_name == "resnet50":
+        model.fc.apply(_init_weights)
 
     total_params     = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)

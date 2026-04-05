@@ -40,9 +40,9 @@ stages:
           cache: false
 
   evaluate:
-    cmd: python -m src.models.evaluate
+    cmd: python -m src.models.inference
     deps:
-      - src/models/evaluate.py
+      - src/models/inference.py
       - outputs/models/best_model.pth
       - data/processed/test.csv
     params:

@@ -6,6 +6,7 @@ import json
 import yaml
 import torch
 import torch.nn as nn
+import random
 import mlflow
 import mlflow.pytorch
 import numpy as np
@@ -19,9 +20,15 @@ from model import build_model, load_class_weights
 from src.utils.logger import get_logger
 from src.utils.mlflow_utils import setup_mlflow, log_tags, log_params_from_dict, log_per_class_metrics
 from src.utils.metrics import compute_metrics, compute_per_class_f1, CLASS_NAMES
+from src.utils.reproducibility import set_seed
 
 logger = get_logger("train")
 
+def seed_worker(worker_id):
+    # each dataloader worker needs its own seed
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
 
 # dataset
 class SkinDataset(Dataset):
@@ -126,6 +133,8 @@ def main():
     tp = p["train"]
     pp = p["prepare"]
 
+    set_seed(tp["random_seed"])
+
     device = torch.device(tp["device"] if torch.cuda.is_available() else "cpu")
     logger.info(f"Device: {device}")
 
@@ -138,10 +147,13 @@ def main():
     train_ds = SkinDataset("data/processed/train.csv", train_tf, label_to_idx)
     val_ds   = SkinDataset("data/processed/val.csv",   val_tf,   label_to_idx)
 
+    g = torch.Generator()
+    g.manual_seed(tp["random_seed"])
+
     train_loader = DataLoader(train_ds, batch_size=tp["batch_size"],
-                              shuffle=True,  num_workers=tp["num_workers"], pin_memory=True)
+                              shuffle=True,  num_workers=tp["num_workers"], pin_memory=True, worker_init_fn=seed_worker, generator=g)
     val_loader   = DataLoader(val_ds,   batch_size=tp["batch_size"],
-                              shuffle=False, num_workers=tp["num_workers"], pin_memory=True)
+                              shuffle=False, num_workers=tp["num_workers"], pin_memory=True, worker_init_fn=seed_worker, generator=g)
 
     # model
     model = build_model(tp["model_name"], tp["num_classes"], tp["pretrained"])
@@ -170,7 +182,8 @@ def main():
 
     with mlflow.start_run() as run:
         logger.info(f"MLflow run ID: {run.info.run_id}")
-
+        mlflow.log_param("random_seed", tp["random_seed"])
+        mlflow.set_tag("random_seed", tp["random_seed"])
         # tags
         log_tags(tp["model_name"], stage="training")
 
