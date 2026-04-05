@@ -211,5 +211,4 @@ mlartifacts/
 mlflow.db
 mlruns/
 help.py
-outputs/models/
-outputs/plots/
+outputs/
