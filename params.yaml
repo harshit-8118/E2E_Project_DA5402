@@ -11,7 +11,7 @@ train:
   device: cuda
   pretrained: true
   epochs: 50
-  model_name: efficientnet_b3 # convnext_small, resnet_50, efficientnet_b3
+  model_name: convnext_small # convnext_small, resnet_50, efficientnet_b3
   num_classes: 7
   early_stopping_patience: 15
   scheduler: cosine
@@ -24,7 +24,7 @@ train:
   random_seed: 42
   mixup_alpha: 0.1
   cutmix_alpha: 0.0
-  label_smoothing: 0.0
+  label_smoothing: 0.05 
   use_amp: true
 
 evaluate:

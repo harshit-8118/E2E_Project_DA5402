@@ -114,7 +114,7 @@ stages:
           device: cuda
           pretrained: true
           epochs: 50
-          model_name: efficientnet_b3
+          model_name: convnext_small
           num_classes: 7
           early_stopping_patience: 15
           scheduler: cosine
@@ -127,21 +127,21 @@ stages:
           random_seed: 42
           mixup_alpha: 0.1
           cutmix_alpha: 0.0
-          label_smoothing: 0.0
+          label_smoothing: 0.05
           use_amp: true
     outs:
     - path: outputs/metrics/mlflow_run_id.txt
       hash: md5
-      md5: 4de8de71931bf11226ea62d4246e9847
+      md5: ab635cf5446ebfd8fd7df87e4347a993
       size: 32
     - path: outputs/metrics/train_history.json
       hash: md5
-      md5: 9385458a527f2f14fdca78804eb7b0fa
-      size: 6373
+      md5: 8039787292f06b80e636139bc329d29a
+      size: 4162
     - path: outputs/models/best_model.pth
       hash: md5
-      md5: 7ab6187dcce7de65caffc018abb0e319
-      size: 43384636
+      md5: 235ca988ba081451c997b2c880dcd0af
+      size: 197967318
   evaluate:
     cmd: python3 -m src.models.inference
     deps:
@@ -151,12 +151,12 @@ stages:
       size: 106486
     - path: outputs/metrics/mlflow_run_id.txt
       hash: md5
-      md5: 4de8de71931bf11226ea62d4246e9847
+      md5: ab635cf5446ebfd8fd7df87e4347a993
       size: 32
     - path: outputs/models/best_model.pth
       hash: md5
-      md5: 7ab6187dcce7de65caffc018abb0e319
-      size: 43384636
+      md5: 235ca988ba081451c997b2c880dcd0af
+      size: 197967318
     - path: src/models/inference.py
       hash: md5
       md5: a4a173cd49a6b373f06e85a9ddcd00d2
@@ -194,7 +194,7 @@ stages:
           device: cuda
           pretrained: true
           epochs: 50
-          model_name: efficientnet_b3
+          model_name: convnext_small
           num_classes: 7
           early_stopping_patience: 15
           scheduler: cosine
@@ -207,19 +207,19 @@ stages:
           random_seed: 42
           mixup_alpha: 0.1
           cutmix_alpha: 0.0
-          label_smoothing: 0.0
+          label_smoothing: 0.05
           use_amp: true
     outs:
     - path: outputs/metrics/eval_metrics.json
       hash: md5
-      md5: 0abbc311432cf4aeacc66ce057ba1772
-      size: 579
+      md5: 437a15aed4804c07a799e00b6479bc49
+      size: 580
     - path: outputs/plots/confusion_matrix.png
       hash: md5
-      md5: 71e8c218e972bc122e94abd0d1f86c9e
-      size: 39256
+      md5: c170ccb4bc319b607f577eff99079821
+      size: 38948
     - path: outputs/plots/gradcam
       hash: md5
-      md5: 6edec1010619083dc854d45399c23829.dir
-      size: 1872209
+      md5: 5a40adf2d24e8af5f8a3ba764b14103b.dir
+      size: 1868931
       nfiles: 14
