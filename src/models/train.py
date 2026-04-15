@@ -16,6 +16,7 @@ from torch.amp import autocast, GradScaler
 from torchvision import transforms
 from PIL import Image
 from tqdm import tqdm
+import argparse
 
 from src.models.model import build_model, load_class_weights
 from src.models.aug_methods import mixup_data, cutmix_data, mixup_cutmix_criterion
@@ -23,6 +24,9 @@ from src.utils.logger import get_logger
 from src.utils.mlflow_utils import setup_mlflow, log_tags, log_params_from_dict, log_per_class_metrics
 from src.utils.metrics import compute_metrics, compute_per_class_f1, CLASS_NAMES
 from src.utils.reproducibility import set_seed
+
+import warnings
+warnings.filterwarnings("ignore")
 
 logger = get_logger("train")
 
@@ -142,6 +146,28 @@ def run_epoch(model, loader, criterion, optimizer, device, is_train: bool, scale
 
     return total_loss / len(loader.dataset), all_preds, all_labels
 
+def parse_arguments(tp):
+    parser = argparse.ArgumentParser(description="Train skin disease detection model")
+
+    parser.add_argument("--model_name", type=str, default=tp["model_name"])
+    parser.add_argument("--epochs", type=int, default=int(tp["epochs"]))
+    parser.add_argument("--batch_size", type=int, default=int(tp["batch_size"]))
+    parser.add_argument("--learning_rate", type=float, default=float(tp["learning_rate"]))
+    parser.add_argument("--image_size", type=int, default=int(tp["image_size"]))
+    parser.add_argument("--random_seed", type=int, default=int(tp["random_seed"]))
+    
+    parser.add_argument("--mixup_alpha", type=float, default=float(tp["mixup_alpha"]))
+    parser.add_argument("--cutmix_alpha", type=float, default=float(tp["cutmix_alpha"]))
+    parser.add_argument("--label_smoothing", type=float, default=float(tp["label_smoothing"]))
+    parser.add_argument("--weight_decay", type=float, default=float(tp["weight_decay"]))
+    
+    parser.add_argument("--early_stopping_patience", type=int, default=int(tp["early_stopping_patience"]))
+    parser.add_argument("--scheduler", type=str, default=str(tp["scheduler"]))
+
+    parser.add_argument("--use_weighted_loss", type=str, default=str(tp["use_weighted_loss"]))
+    parser.add_argument("--use_amp", type=str, default=str(tp["use_amp"]))
+
+    return parser.parse_args()
 
 # main
 def main():
@@ -151,6 +177,23 @@ def main():
 
     tp = p["train"]
     pp = p["prepare"]
+
+    args = parse_arguments(tp)
+
+    if args.model_name is not None: tp["model_name"] = args.model_name
+    if args.epochs is not None: tp["epochs"] = args.epochs
+    if args.batch_size is not None: tp["batch_size"] = args.batch_size
+    if args.learning_rate is not None: tp["learning_rate"] = args.learning_rate
+    if args.image_size is not None: tp["image_size"] = args.image_size
+    if args.random_seed is not None: tp["random_seed"] = args.random_seed
+    if args.use_weighted_loss is not None: tp["use_weighted_loss"] = str(args.use_weighted_loss).lower() == "true"
+    if args.use_amp is not None: tp["use_amp"] = str(args.use_amp).lower() == "true"
+    if args.weight_decay is not None: tp["weight_decay"] = args.weight_decay
+    if args.mixup_alpha is not None: tp["mixup_alpha"] = args.mixup_alpha
+    if args.cutmix_alpha is not None: tp["cutmix_alpha"] = args.cutmix_alpha
+    if args.label_smoothing is not None: tp["label_smoothing"] = args.label_smoothing
+    if args.early_stopping_patience is not None: tp["early_stopping_patience"] = args.early_stopping_patience
+    if args.scheduler is not None: tp["scheduler"] = args.scheduler
 
     set_seed(tp["random_seed"])
 
@@ -203,10 +246,18 @@ def main():
     )
 
     # mlflow run
-    setup_mlflow("skin-disease-detection")
     scaler = GradScaler(device="cuda", enabled=tp["use_amp"])
 
-    with mlflow.start_run() as run:
+    active_run_id = os.environ.get("MLFLOW_RUN_ID", None)
+    if active_run_id:
+        print('-'*30)
+        print(f"mlflow run injected run id: {active_run_id}")
+        print('-'*30)
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow"))
+    else:
+        setup_mlflow("skin-disease-detection")
+
+    with mlflow.start_run(run_id=active_run_id) as run:
         logger.info(f"MLflow run ID: {run.info.run_id}")
         mlflow.log_param("random_seed", tp["random_seed"])
         mlflow.set_tag("random_seed", tp["random_seed"])
@@ -214,7 +265,7 @@ def main():
         log_tags(tp["model_name"], stage="training")
 
         # params
-        log_params_from_dict({**tp, "val_size": pp["val_size"], "random_seed": pp["random_seed"]})
+        log_params_from_dict({**tp, "val_size": pp["val_size"], "prepare_random_seed": pp["random_seed"]})
 
         best_epoch   = 0
         best_val_f1  = 0.0

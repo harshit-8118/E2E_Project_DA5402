@@ -1,11 +1,9 @@
-# src/models/evaluate.py
-# evaluation on test set + gradcam + mlflow logging + model registry
-
 import os
 import json
 import yaml
 import torch
 import mlflow
+import argparse
 import mlflow.pytorch
 import numpy as np
 import pandas as pd
@@ -28,8 +26,19 @@ from src.utils.metrics import (
     get_classification_report, CLASS_NAMES
 )
 from src.utils.reproducibility import set_seed
+import warnings
+warnings.filterwarnings("ignore")
 
 logger = get_logger("evaluate")
+
+class ModelWrapper(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, x):
+        x = x.float()  
+        return self.model(x)
 
 def plot_confusion_matrix(cm: np.ndarray, classes: list, save_path: str):
     plt.figure(figsize=(10, 8))
@@ -93,12 +102,58 @@ def generate_gradcam_samples(model, dataset, label_to_idx, device, save_dir: str
     logger.info(f"GradCAM samples saved to {save_dir}")
 
 
+def parse_arguments(tp, ep):
+    parser = argparse.ArgumentParser(description="Train skin disease detection model")
+
+    parser.add_argument("--model_name", type=str, default=tp["model_name"])
+    parser.add_argument("--epochs", type=int, default=int(tp["epochs"]))
+    parser.add_argument("--batch_size", type=int, default=int(tp["batch_size"]))
+    parser.add_argument("--learning_rate", type=float, default=float(tp["learning_rate"]))
+    parser.add_argument("--image_size", type=int, default=int(tp["image_size"]))
+    
+    parser.add_argument("--mixup_alpha", type=float, default=float(tp["mixup_alpha"]))
+    parser.add_argument("--cutmix_alpha", type=float, default=float(tp["cutmix_alpha"]))
+    parser.add_argument("--label_smoothing", type=float, default=float(tp["label_smoothing"]))
+    parser.add_argument("--weight_decay", type=float, default=float(tp["weight_decay"]))
+    parser.add_argument("--random_seed", type=int, default=int(tp["random_seed"]))
+    
+    parser.add_argument("--early_stopping_patience", type=int, default=int(tp["early_stopping_patience"]))
+    parser.add_argument("--scheduler", type=str, default=str(tp["scheduler"]))
+
+    parser.add_argument("--use_weighted_loss", type=str, default=str(tp["use_weighted_loss"]))
+    parser.add_argument("--use_amp", type=str, default=str(tp["use_amp"]))
+
+    parser.add_argument("--model_path", type=str, default=str(ep["model_path"]))
+    parser.add_argument("--acceptance_macro_f1", type=float, default=float(ep["acceptance_macro_f1"]))
+
+    return parser.parse_args()
+
+
 def main():
     with open("params.yaml") as f:
         p = yaml.safe_load(f)
 
     tp = p["train"]
     ep = p["evaluate"]
+
+    args = parse_arguments(tp, ep)
+
+    if args.model_name is not None: tp["model_name"] = args.model_name
+    if args.epochs is not None: tp["epochs"] = args.epochs
+    if args.batch_size is not None: tp["batch_size"] = args.batch_size
+    if args.learning_rate is not None: tp["learning_rate"] = args.learning_rate
+    if args.image_size is not None: tp["image_size"] = args.image_size
+    if args.random_seed is not None: tp["random_seed"] = args.random_seed
+    if args.use_weighted_loss is not None: tp["use_weighted_loss"] = str(args.use_weighted_loss).lower() == "true"
+    if args.use_amp is not None: tp["use_amp"] = str(args.use_amp).lower() == "true"
+    if args.weight_decay is not None: tp["weight_decay"] = args.weight_decay
+    if args.mixup_alpha is not None: tp["mixup_alpha"] = args.mixup_alpha
+    if args.cutmix_alpha is not None: tp["cutmix_alpha"] = args.cutmix_alpha
+    if args.label_smoothing is not None: tp["label_smoothing"] = args.label_smoothing
+    if args.early_stopping_patience is not None: tp["early_stopping_patience"] = args.early_stopping_patience
+    if args.scheduler is not None: tp["scheduler"] = args.scheduler
+    if args.model_path is not None: ep["model_path"] = args.model_path
+    if args.acceptance_macro_f1 is not None: ep["acceptance_macro_f1"] = args.acceptance_macro_f1
 
     set_seed(tp["random_seed"])
 
@@ -171,12 +226,24 @@ def main():
     )
 
     # ── mlflow logging ─────────────────────────────────────────────────────────
-    setup_mlflow("skin-disease-detection")
 
+    env_run_id  = os.environ.get("MLFLOW_RUN_ID", None)
+    file_run_id = None
     run_id_path = "outputs/metrics/mlflow_run_id.txt"
-    run_id      = open(run_id_path).read().strip() if os.path.exists(run_id_path) else None
+    if os.path.exists(run_id_path):
+        file_run_id = open(run_id_path).read().strip()
 
-    with mlflow.start_run(run_id=run_id):
+    # env var takes priority (set by mlflow run), then saved file
+    active_run_id = env_run_id or file_run_id
+
+    if active_run_id == env_run_id and env_run_id is not None:
+        print(f"Resuming MLflow Run: {active_run_id}")
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow"))
+    else:
+        print(f"Starting a new MLflow Run")
+        setup_mlflow("skin-disease-detection")
+
+    with mlflow.start_run(run_id=active_run_id):
         log_tags(tp["model_name"], stage="evaluation")
 
         # ── overall metrics — all of them ──────────────────────────────────────
@@ -210,14 +277,16 @@ def main():
             f.write(report)
         mlflow.log_artifact(report_path)
 
-        # ── model registration inside same run — no end_run() ─────────────────
+        wrapped_model = ModelWrapper(model)
         if overall["macro_f1"] >= ep["acceptance_macro_f1"]:
             logger.info(f"F1 {overall['macro_f1']} >= {ep['acceptance_macro_f1']} — registering model")
 
+            # 'artifact_path' was renamed to 'artifact_path' in generic log_model, 
             mlflow.pytorch.log_model(
-                pytorch_model=model,
-                name="model",
+                pytorch_model=wrapped_model,
+                artifact_path="model",
                 registered_model_name="skin-disease-classifier",
+                code_paths=[__file__],
                 pip_requirements=[
                     f"torch=={torch.__version__}",
                     "torchvision",
@@ -226,20 +295,19 @@ def main():
                 ]
             )
 
-            # transition to production
+            # Transition to production
             from mlflow.tracking import MlflowClient
-            client  = MlflowClient()
-            version = client.get_latest_versions(
-                "skin-disease-classifier", stages=["None"]
-            )[0].version
-
-            client.transition_model_version_stage(
-                name="skin-disease-classifier",
-                version=version,
-                stage="Production",
-                archive_existing_versions=True
-            )
-            logger.info(f"Model v{version} transitioned to Production")
+            client = MlflowClient()
+            # 1. Search for versions correctly
+            versions = client.search_model_versions("name='skin-disease-classifier'")
+            if versions:
+                latest_version = sorted(versions, key=lambda v: int(v.version))[-1].version
+                client.set_registered_model_alias(
+                    name="skin-disease-classifier",
+                    alias="production",
+                    version=latest_version
+                )
+                logger.info(f"Model v{latest_version} tagged as 'production' alias")
         else:
             logger.warning(
                 f"F1 {overall['macro_f1']} < {ep['acceptance_macro_f1']} — model NOT registered"

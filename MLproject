@@ -1,0 +1,105 @@
+# MLproject
+# MLflow Project file — defines entry points for running pipeline stages
+
+name: skin-disease-detection
+
+# use existing conda/venv environment
+python_env: python_env.yaml
+
+entry_points:
+
+  # ── data preparation ────────────────────────────────────────────────────────
+  prepare:
+    parameters:
+      val_size:
+        type: float
+        default: 0.15
+      random_seed:
+        type: float
+        default: 42
+    command: "python -m src.data_proc.prepare --val_size {val_size} --random_seed {random_seed}"
+
+  # ── model training ──────────────────────────────────────────────────────────
+  train_and_evaluate:
+    parameters:
+      model_name:
+        type: str
+        default: efficientnet_b3
+      epochs:
+        type: int
+        default: 50
+      batch_size:
+        type: int
+        default: 64
+      learning_rate:
+        type: float
+        default: 0.0001
+      image_size:
+        type: int
+        default: 336
+      random_seed:
+        type: int
+        default: 42
+      use_weighted_loss:
+        type: str
+        default: true
+      use_amp:
+        type: str
+        default: true
+      weight_decay:
+        type: float
+        default: 0.0
+      mixup_alpha:
+        type: float
+        default: 0.1
+      cutmix_alpha:
+        type: float
+        default: 0.0
+      label_smoothing:
+        type: float
+        default: 0.0
+      early_stopping_patience:
+        type: int
+        default: 15
+      scheduler:
+        type: str
+        default: cosine
+      model_path:
+        type: str
+        default: outputs/models/best_model.pth
+      acceptance_macro_f1:
+        type: float
+        default: 0.74
+    command: > 
+      python -m src.models.train 
+      --model_name {model_name} 
+      --epochs {epochs} 
+      --batch_size  {batch_size} 
+      --learning_rate {learning_rate} 
+      --image_size  {image_size} 
+      --random_seed  {random_seed} 
+      --use_weighted_loss {use_weighted_loss} 
+      --use_amp {use_amp} 
+      --weight_decay {weight_decay} 
+      --mixup_alpha {mixup_alpha} 
+      --cutmix_alpha {cutmix_alpha}
+      --label_smoothing {label_smoothing} 
+      --early_stopping_patience {early_stopping_patience}
+      --scheduler {scheduler} &&
+      python -m src.models.inference
+      --model_path {model_path}
+      --acceptance_macro_f1 {acceptance_macro_f1}
+
+  # ── serve API ───────────────────────────────────────────────────────────────
+  serve:
+    parameters:
+      host:
+        type: str
+        default: "0.0.0.0"
+      port:
+        type: float
+        default: 8000
+      workers:
+        type: float
+        default: 1
+    command: "uvicorn src.api.main:app --host {host} --port {port} --workers {workers}"
