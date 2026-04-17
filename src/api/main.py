@@ -2,9 +2,8 @@
 # FastAPI backend — skin disease detection inference server
 # Calls MLflow serve and load latest model, then use loaded local model for inference and prediction. 
 # choosen this way to obtain gradcam images and preprocessing.
-# uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+# uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 # keep USE_REMOTE_MODEL=false
-#
 
 import io
 import os
@@ -12,17 +11,16 @@ import json
 import time
 import uuid
 import base64
-import logging
 import platform
-import traceback
 from contextlib import asynccontextmanager
 from datetime import datetime
-import mlflow
+
 import torch
 import psutil
 import numpy as np
 import yaml
 import httpx
+import mlflow
 from PIL import Image
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, UploadFile, HTTPException, Depends, Request
@@ -39,8 +37,12 @@ from prometheus_client import (
 from starlette.responses import Response
 
 from src.models.model import build_model
+from src.db.mongodb import mongo
 from src.utils.logger import get_logger
 from src.utils.reproducibility import set_seed
+
+import warnings
+warnings.filterwarnings("ignore")
 
 load_dotenv()
 logger = get_logger("api")
@@ -168,10 +170,13 @@ MODEL_LOADED          = _make_gauge("model_loaded", "1 if model is loaded and re
 ACTIVE_REQUESTS       = _make_gauge("active_requests", "Currently active requests", ["endpoint"])
 CPU_PERCENT           = _make_gauge("system_cpu_percent", "System CPU utilization", [])
 MEMORY_PERCENT        = _make_gauge("system_memory_percent", "System memory utilization", [])
+MEMORY_USED_GB    = _make_gauge("system_memory_used_gb",          "System memory used (GB)")
 GPU_MEMORY_ALLOCATED  = _make_gauge("gpu_memory_allocated_gb", "GPU memory allocated (GB)", [])
 GPU_MEMORY_RESERVED   = _make_gauge("gpu_memory_reserved_gb", "GPU memory reserved (GB)", [])
+GPU_UTILIZATION          = _make_gauge("gpu_utilization_percent",        "GPU utilization %")
 MODEL_MEMORY_BYTES    = _make_gauge("model_memory_bytes", "Estimated model memory bytes", [])
 UPTIME_SECONDS        = _make_gauge("api_uptime_seconds", "API server uptime in seconds", [])
+MONGODB_UP        = _make_gauge("mongodb_up",                     "1 if MongoDB reachable")
 
 # user level
 FEEDBACK_POSITIVE_RATE= _make_gauge("feedback_positive_rate", "Rolling positive feedback rate", [])
@@ -186,7 +191,6 @@ app_state = {
     "feedback_up"  : 0,
     "feedback_down": 0,
 }
-feedback_store: dict = {}
 
 
 # ── lifespan ───────────────────────────────────────────────────────────────────
@@ -226,6 +230,7 @@ async def lifespan(app: FastAPI):
         param_bytes = sum(p.nelement() * p.element_size() for p in model.parameters())
         MODEL_MEMORY_BYTES.set(param_bytes)
         MODEL_LOADED.set(1)
+        MONGODB_UP.set(1 if mongo.is_up() else 0)
         logger.info(f"Model loaded | params={param_bytes/1e6:.1f}MB")
 
     except Exception as e:
@@ -236,6 +241,7 @@ async def lifespan(app: FastAPI):
 
     app_state["model"] = None
     MODEL_LOADED.set(0)
+    mongo.close()
     logger.info("Server shutting down")
 
 
@@ -260,7 +266,9 @@ app.add_middleware(
 async def system_metrics_middleware(request: Request, call_next):
     # system resource snapshot per request
     CPU_PERCENT.set(psutil.cpu_percent(interval=None))
-    MEMORY_PERCENT.set(psutil.virtual_memory().percent)
+    vm = psutil.virtual_memory()
+    MEMORY_PERCENT.set(vm.percent)
+    MEMORY_USED_GB.set(round(vm.used / 1e9, 2))
 
     if torch.cuda.is_available():
         GPU_MEMORY_ALLOCATED.set(torch.cuda.memory_allocated() / 1e9)
@@ -268,6 +276,8 @@ async def system_metrics_middleware(request: Request, call_next):
 
     if app_state["start_time"]:
         UPTIME_SECONDS.set(time.time() - app_state["start_time"])
+
+    MONGODB_UP.set(1 if mongo.is_up() else 0)
 
     response = await call_next(request)
     return response
@@ -284,6 +294,7 @@ class FeedbackResponse(BaseModel):
     status        : str
     prediction_id : str
     vote          : str
+    stored_in     : str
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
@@ -346,7 +357,7 @@ def save_gradcam(result_b64):
         img_bytes = base64.b64decode(encoded_data)
         with open("archived/latest_gradcam.png", "wb") as f:
             f.write(img_bytes)
-        print("✅Success: Saved latest_gradcam.png to local directory")
+        print("✅ Success: Saved latest_gradcam.png to local directory")
     except Exception as e:
         print(f"❌Failed to save local image: {e}")
 
@@ -381,6 +392,7 @@ def health():
         "status"   : "ok",
         "timestamp": datetime.utcnow().isoformat(),
         "uptime_s" : round(time.time() - app_state["start_time"], 1) if app_state["start_time"] else 0,
+        "mongodb"   : "up" if mongo.is_up() else "down",
     }
 
 
@@ -422,14 +434,16 @@ def system_info():
         "cpu_percent"   : psutil.cpu_percent(interval=0.1),
         "memory_percent": psutil.virtual_memory().percent,
         "memory_used_gb": round(psutil.virtual_memory().used / 1e9, 2),
-        "python_version": platform.python_version(),
+        "mongodb_up"    : mongo.is_up(),
         "device"        : str(DEVICE),
+        "python_version": platform.python_version(),
     }
     if torch.cuda.is_available():
         info["gpu_name"]              = torch.cuda.get_device_name(0)
         info["gpu_memory_allocated_gb"] = round(torch.cuda.memory_allocated() / 1e9, 2)
         info["gpu_memory_reserved_gb"]  = round(torch.cuda.memory_reserved()  / 1e9, 2)
         info["gpu_memory_total_gb"]     = round(torch.cuda.get_device_properties(0).total_memory / 1e9, 2)
+    REQUEST_COUNT.labels(endpoint="/system/info", method="GET", status_code=200).inc()
     return info
 
 
@@ -471,22 +485,34 @@ async def predict(file: UploadFile = File(...), model=Depends(get_model)):
         pred_class = CLASS_NAMES[pred_idx]
         confidence = float(probs[pred_idx])
         meta       = DISEASE_META[pred_class]
-
+        all_scores = {CLASS_NAMES[i]: round(float(probs[i]), 4) for i in range(len(CLASS_NAMES))}
         # ── gradcam ────────────────────────────────────────────────────────────
         gradcam_b64 = run_gradcam(model, tensor, pred_idx, np_img)
 
         if gradcam_b64:
             save_gradcam(gradcam_b64)
+
+         # save prediction to MongoDB
+        mongo.save_prediction(
+            prediction_id  = prediction_id,
+            predicted_class= pred_class,
+            confidence     = round(confidence, 4),
+            risk_level     = meta["risk_level"],
+            all_scores     = all_scores,
+            inference_ms   = round(infer_time * 1000, 2),
+            image_filename = file.filename,
+        )
+
         # ── prometheus counters ────────────────────────────────────────────────
         total_latency = time.time() - start_time
-        mem_delta     = psutil.virtual_memory().used / 1e6 - mem_before
+        mem_delta     = max(psutil.virtual_memory().used / 1e6 - mem_before, 0)
         cpu_delta     = psutil.cpu_percent(interval=None)
 
         REQUEST_COUNT.labels(endpoint="/predict", method="POST", status_code=200).inc()
         IMAGES_PROCESSED.labels(status="success").inc()
         PREDICTION_CLASS.labels(predicted_class=pred_class, risk_level=meta["risk_level"]).inc()
         CONFIDENCE_HISTOGRAM.labels(predicted_class=pred_class).observe(confidence)
-        REQUEST_MEMORY_USAGE.labels(endpoint="/predict").observe(max(mem_delta, 0))
+        REQUEST_MEMORY_USAGE.labels(endpoint="/predict").observe(mem_delta)
         REQUEST_CPU_USAGE.labels(endpoint="/predict").observe(cpu_delta)
 
         app_state["pred_count"] += 1
@@ -506,12 +532,12 @@ async def predict(file: UploadFile = File(...), model=Depends(get_model)):
             "display_name"   : meta["display_name"],
             "risk_level"     : meta["risk_level"],
             "confidence"     : round(confidence, 4),
-            "all_scores"     : {CLASS_NAMES[i]: round(float(probs[i]), 4) for i in range(len(CLASS_NAMES))},
+            "all_scores"     : all_scores,
             "symptoms"       : meta["symptoms"],
             "advisory"       : meta["advisory"],
             "sources"        : meta["sources"],
             "gradcam_image"  : gradcam_b64,
-            "disclaimer"     : "This tool provides AI-assisted preliminary assessment only. It is NOT a substitute for professional medical diagnosis. Please consult a qualified dermatologist.",
+            "disclaimer"     : "AI-assisted assessment only. NOT a substitute for professional medical diagnosis.",
             "inference_ms"   : round(infer_time * 1000, 2),
             "total_ms"       : round(total_latency * 1000, 2),
             "timestamp"      : datetime.utcnow().isoformat(),
@@ -582,12 +608,8 @@ def feedback(req: FeedbackRequest):
         REQUEST_COUNT.labels(endpoint="/feedback", method="POST", status_code=422).inc()
         raise HTTPException(status_code=422, detail="vote must be 'thumbs_up' or 'thumbs_down'")
 
-    feedback_store[req.prediction_id] = {
-        "prediction_id": req.prediction_id,
-        "vote"         : req.vote,
-        "comment"      : req.comment,
-        "timestamp"    : datetime.utcnow().isoformat(),
-    }
+    stored_in_mongo = mongo.save_feedback(req.prediction_id, req.vote, req.comment)
+    stored_in = "mongodb" if stored_in_mongo else "memory"
 
     FEEDBACK_COUNTER.labels(vote=req.vote).inc()
     REQUEST_COUNT.labels(endpoint="/feedback", method="POST", status_code=200).inc()
@@ -601,23 +623,21 @@ def feedback(req: FeedbackRequest):
     if total > 0:
         FEEDBACK_POSITIVE_RATE.set(app_state["feedback_up"] / total)
 
-    logger.info(f"Feedback | id={req.prediction_id} | vote={req.vote}")
-    return FeedbackResponse(status="recorded", prediction_id=req.prediction_id, vote=req.vote)
+    logger.info(f"Feedback | id={req.prediction_id} | vote={req.vote} | stored=, stored_in={stored_in}")
+    return FeedbackResponse(status="recorded", prediction_id=req.prediction_id, vote=req.vote, stored_in=stored_in)
 
 
 @app.get("/feedback/stats", tags=["Feedback"])
 def feedback_stats():
     """Thumbs up/down ratio and all feedback records."""
-    total       = len(feedback_store)
-    thumbs_up   = sum(1 for f in feedback_store.values() if f["vote"] == "thumbs_up")
-    thumbs_down = total - thumbs_up
     REQUEST_COUNT.labels(endpoint="/feedback/stats", method="GET", status_code=200).inc()
-    return {
-        "total"        : total,
-        "thumbs_up"    : thumbs_up,
-        "thumbs_down"  : thumbs_down,
-        "positive_rate": round(thumbs_up / total, 4) if total > 0 else 0.0,
-    }
+    return mongo.get_feedback_stats()
+
+
+@app.get("/predictions/stats", tags=["Model"])
+def prediction_stats():
+    REQUEST_COUNT.labels(endpoint="/predictions/stats", method="GET", status_code=200).inc()
+    return mongo.get_prediction_stats()
 
 
 @app.get("/metrics", tags=["System"])

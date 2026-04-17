@@ -8,7 +8,7 @@ prepare:
   test_images_dir: data/raw/test_images
 
 train:
-  device: cpu # cpu | cuda for training
+  device: cuda # cpu | cuda for training
   pretrained: true
   epochs: 50
   model_name: efficientnet_b3 # convnext_small, resnet_50, efficientnet_b3
@@ -25,7 +25,7 @@ train:
   mixup_alpha: 0.1
   cutmix_alpha: 0.0
   label_smoothing: 0.0
-  use_amp: false # true for cuda | false for cpu
+  use_amp: true # true for cuda | false for cpu
 
 evaluate:
   acceptance_macro_f1: 0.75    # minimum to register model

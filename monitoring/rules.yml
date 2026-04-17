@@ -1,0 +1,215 @@
+# monitoring/rules.yml
+# Prometheus alerting rules — critical and moderate alerts
+# Categories: inference, memory, CPU, GPU, API, MongoDB
+
+groups:
+
+  # ── inference alerts ─────────────────────────────────────────────────────────
+  - name: inference_alerts
+    rules:
+
+      - alert: HighInferenceLatency_Critical
+        expr: histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m])) > 3.0
+        for: 2m
+        labels:
+          severity: critical
+          category: inference
+        annotations:
+          summary: "Critical: p95 inference latency > 3s"
+          description: "p95 inference latency is {{ $value | humanizeDuration }} — model may be overloaded or GPU is throttling."
+
+      - alert: HighInferenceLatency_Moderate
+        expr: histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m])) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          category: inference
+        annotations:
+          summary: "Warning: p95 inference latency > 1s"
+          description: "p95 inference latency is {{ $value | humanizeDuration }} — consider checking GPU utilization."
+
+      - alert: HighErrorRate_Critical
+        expr: rate(errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          category: api
+        annotations:
+          summary: "Critical: API error rate > 0.1/s"
+          description: "API is generating {{ $value | humanize }} errors/second on endpoint {{ $labels.endpoint }}."
+
+      - alert: ModelNotLoaded
+        expr: model_loaded == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: api
+        annotations:
+          summary: "Critical: Model is not loaded"
+          description: "The ML model failed to load or crashed. API cannot serve predictions."
+
+      - alert: HighRiskPredictionSpike
+        expr: rate(high_risk_predictions_total[10m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: inference
+        annotations:
+          summary: "Warning: High rate of melanoma predictions"
+          description: "Melanoma (HIGH risk) predictions at {{ $value | humanize }}/s — may indicate unusual input data."
+
+      - alert: LowPredictionConfidence
+        expr: histogram_quantile(0.50, rate(prediction_confidence_bucket[10m])) < 0.4
+        for: 10m
+        labels:
+          severity: warning
+          category: inference
+        annotations:
+          summary: "Warning: Median prediction confidence < 40%"
+          description: "Median model confidence is {{ $value | humanizePercentage }} — model may be receiving out-of-distribution images."
+
+  # ── memory alerts ────────────────────────────────────────────────────────────
+  - name: memory_alerts
+    rules:
+
+      - alert: SystemMemory_Critical
+        expr: system_memory_percent > 90
+        for: 2m
+        labels:
+          severity: critical
+          category: memory
+        annotations:
+          summary: "Critical: System memory > 90%"
+          description: "System memory usage is at {{ $value }}%. Risk of OOM kill."
+
+      - alert: SystemMemory_Moderate
+        expr: system_memory_percent > 75
+        for: 5m
+        labels:
+          severity: warning
+          category: memory
+        annotations:
+          summary: "Warning: System memory > 75%"
+          description: "System memory usage is at {{ $value }}%."
+
+      - alert: GPUMemory_Critical
+        expr: gpu_memory_allocated_gb > 40
+        for: 2m
+        labels:
+          severity: critical
+          category: memory
+        annotations:
+          summary: "Critical: GPU memory > 40GB"
+          description: "GPU allocated memory is {{ $value | humanize }}GB — approaching A6000 limit of 48GB."
+
+      - alert: GPUMemory_Moderate
+        expr: gpu_memory_allocated_gb > 30
+        for: 5m
+        labels:
+          severity: warning
+          category: memory
+        annotations:
+          summary: "Warning: GPU memory > 30GB"
+          description: "GPU allocated memory is {{ $value | humanize }}GB."
+
+      - alert: RequestMemorySpike
+        expr: histogram_quantile(0.95, rate(request_memory_usage_mb_bucket[5m])) > 1000
+        for: 3m
+        labels:
+          severity: warning
+          category: memory
+        annotations:
+          summary: "Warning: p95 request memory > 1GB"
+          description: "Individual requests consuming {{ $value }}MB of memory."
+
+  # ── CPU alerts ───────────────────────────────────────────────────────────────
+  - name: cpu_alerts
+    rules:
+
+      - alert: SystemCPU_Critical
+        expr: system_cpu_percent > 90
+        for: 3m
+        labels:
+          severity: critical
+          category: cpu
+        annotations:
+          summary: "Critical: System CPU > 90%"
+          description: "CPU utilization at {{ $value }}% for over 3 minutes."
+
+      - alert: SystemCPU_Moderate
+        expr: system_cpu_percent > 70
+        for: 5m
+        labels:
+          severity: warning
+          category: cpu
+        annotations:
+          summary: "Warning: System CPU > 70%"
+          description: "CPU utilization sustained at {{ $value }}%."
+
+      - alert: RequestCPUSpike
+        expr: histogram_quantile(0.95, rate(request_cpu_usage_percent_bucket[5m])) > 60
+        for: 5m
+        labels:
+          severity: warning
+          category: cpu
+        annotations:
+          summary: "Warning: p95 per-request CPU > 60%"
+          description: "Individual requests consuming {{ $value }}% CPU — GradCAM or preprocessing may be the bottleneck."
+
+  # ── API health alerts ────────────────────────────────────────────────────────
+  - name: api_alerts
+    rules:
+
+      - alert: APIDown
+        expr: up{job="fastapi_backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: api
+        annotations:
+          summary: "Critical: FastAPI backend is down"
+          description: "Prometheus cannot reach the FastAPI backend at /metrics endpoint."
+
+      - alert: HighActiveRequests
+        expr: sum(active_requests) > 20
+        for: 2m
+        labels:
+          severity: warning
+          category: api
+        annotations:
+          summary: "Warning: > 20 concurrent requests"
+          description: "{{ $value }} concurrent requests — possible traffic spike or slow inference blocking queue."
+
+      - alert: NegativeFeedbackSpike
+        expr: rate(feedback_total{vote="thumbs_down"}[15m]) > rate(feedback_total{vote="thumbs_up"}[15m]) * 2
+        for: 10m
+        labels:
+          severity: warning
+          category: api
+        annotations:
+          summary: "Warning: Negative feedback rate is 2x positive rate"
+          description: "Users are reporting predictions as incorrect at a high rate — model performance may have degraded."
+
+  # ── MongoDB alerts ───────────────────────────────────────────────────────────
+  - name: mongodb_alerts
+    rules:
+
+      - alert: MongoDBDown
+        expr: mongodb_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Critical: MongoDB is unreachable"
+          description: "MongoDB connection failed — feedback and prediction data is falling back to in-memory store."
+
+      - alert: MongoDBDown_Sustained
+        expr: mongodb_up == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: database
+        annotations:
+          summary: "Critical: MongoDB down for 5+ minutes"
+          description: "MongoDB has been unreachable for 5 minutes. All data will be lost on restart."

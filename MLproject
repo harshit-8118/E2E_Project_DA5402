@@ -27,10 +27,10 @@ entry_points:
         default: efficientnet_b3
       epochs:
         type: int
-        default: 30 # 50:cuda | 30:cpu
+        default: 50 # 50:cuda | 30:cpu
       batch_size:
         type: int
-        default: 16 # 64:cuda | 16: cpu
+        default: 64 # 64:cuda | 16: cpu
       learning_rate:
         type: float
         default: 0.0001
@@ -60,7 +60,7 @@ entry_points:
         default: 0.0
       early_stopping_patience:
         type: int
-        default: 10 # 15: cuda | 10: cpu
+        default: 15 # 15: cuda | 10: cpu
       scheduler:
         type: str
         default: cosine
