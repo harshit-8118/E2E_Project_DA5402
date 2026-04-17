@@ -56,7 +56,7 @@ header {
 }
 
 .logo-mark {
-  width: 36px; height: 36px;
+  width: 52px; height: 36px;
   border: 2px solid var(--accent);
   border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
