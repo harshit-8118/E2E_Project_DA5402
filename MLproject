@@ -27,10 +27,10 @@ entry_points:
         default: efficientnet_b3
       epochs:
         type: int
-        default: 50
+        default: 30 # 50:cuda | 30:cpu
       batch_size:
         type: int
-        default: 64
+        default: 16 # 64:cuda | 16: cpu
       learning_rate:
         type: float
         default: 0.0001
@@ -60,7 +60,7 @@ entry_points:
         default: 0.0
       early_stopping_patience:
         type: int
-        default: 15
+        default: 10 # 15: cuda | 10: cpu
       scheduler:
         type: str
         default: cosine
@@ -69,7 +69,7 @@ entry_points:
         default: outputs/models/best_model.pth
       acceptance_macro_f1:
         type: float
-        default: 0.74
+        default: 0.75
     command: > 
       python -m src.models.train 
       --model_name {model_name} 
@@ -95,11 +95,11 @@ entry_points:
     parameters:
       host:
         type: str
-        default: "0.0.0.0"
+        default: "127.0.0.1"
       port:
         type: float
         default: 8000
       workers:
         type: float
-        default: 1
+        default: 2
     command: "uvicorn src.api.main:app --host {host} --port {port} --workers {workers}"
