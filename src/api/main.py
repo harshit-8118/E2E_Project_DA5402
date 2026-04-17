@@ -45,6 +45,9 @@ from src.utils.reproducibility import set_seed
 load_dotenv()
 logger = get_logger("api")
 
+# change 1 — read DEVICE from env so cpu branch uses cpu
+DEVICE = torch.device(os.getenv("DEVICE", "cuda" if torch.cuda.is_available() else "cpu"))
+
 # ── constants ──────────────────────────────────────────────────────────────────
 CLASS_NAMES      = ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"]
 IMAGE_SIZE       = int(os.getenv("IMAGE_SIZE", 336))

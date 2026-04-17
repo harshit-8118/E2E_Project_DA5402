@@ -162,14 +162,14 @@ def main():
 
     # ── load best model ────────────────────────────────────────────────────────
     model = build_model(tp["model_name"], tp["num_classes"], pretrained=False)
-    model.load_state_dict(torch.load(ep["model_path"], map_location=device))
+    model.load_state_dict(torch.load(ep["model_path"], map_location=device, weights_only=True))
     model = model.to(device)
 
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
-
-    allocated_before = torch.cuda.memory_allocated() / 1024**3
-    print(f"Before training: {allocated_before:.2f} GB allocated")
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        allocated_before = torch.cuda.memory_allocated() / 1024**3
+        logger.info(f"GPU memory before: {allocated_before:.2f} GB")
 
     model.eval()
     logger.info(f"Loaded model from {ep['model_path']}")
@@ -288,7 +288,7 @@ def main():
                 registered_model_name="skin-disease-classifier",
                 code_paths=[__file__],
                 pip_requirements=[
-                    f"torch=={torch.__version__}",
+                    "torch",
                     "torchvision",
                     "Pillow",
                     "numpy",

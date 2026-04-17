@@ -122,7 +122,8 @@ def run_epoch(model, loader, criterion, optimizer, device, is_train: bool, scale
                 images, labels_a, labels_b, lam = mixup_data(images, labels, mixup_alpha, device)
 
             # mixed precision forward pass
-            with autocast(device_type="cuda", enabled=(scaler is not None)):
+            device_type = "cuda" if torch.cuda.is_available() else "cpu"
+            with autocast(device_type=device_type, enabled=(scaler is not None and torch.cuda.is_available())):
                 outputs = model(images)
                 if use_cutmix or use_mixup:
                     loss = mixup_cutmix_criterion(criterion, outputs, labels_a, labels_b, lam)
@@ -221,11 +222,10 @@ def main():
     model = build_model(tp["model_name"], tp["num_classes"], tp["pretrained"])
     model = model.to(device)
 
-    torch.cuda.empty_cache()
-    torch.cuda.reset_peak_memory_stats()
-
-    allocated_before = torch.cuda.memory_allocated() / 1024**3
-    print(f"Before training: {allocated_before:.2f} GB allocated")
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        logger.info(f"GPU memory before: {torch.cuda.memory_allocated()/1024**3:.2f} GB")
 
     # weighted loss — handles class imbalance
     class_weights = load_class_weights("data/reports/baseline_stats.json", CLASS_NAMES, device)
@@ -246,7 +246,8 @@ def main():
     )
 
     # mlflow run
-    scaler = GradScaler(device="cuda", enabled=tp["use_amp"])
+    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+    scaler = GradScaler(device=device_type, enabled=(tp["use_amp"] and torch.cuda.is_available()))
 
     active_run_id = os.environ.get("MLFLOW_RUN_ID", None)
     if active_run_id:

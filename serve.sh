@@ -4,6 +4,8 @@ set -euo pipefail
 # 1. Configuration
 # UPDATED: Point to the 'production' alias of the registered model
 # PRODUCTION MODLE RUNID=f8a0be4f4bb34682baaef1f809f5de4b
+# CPU trained RUNID version 9: 431cd8226fbe4250af9793e57b059ca5
+
 MODEL_URI="${1:-models:/skin-disease-classifier@production}"
 PORT="${PORT:-5001}"
 
