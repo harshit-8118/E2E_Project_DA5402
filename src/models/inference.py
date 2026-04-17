@@ -288,7 +288,7 @@ def main():
                 registered_model_name="skin-disease-classifier",
                 code_paths=[__file__],
                 pip_requirements=[
-                    "torch",
+                    "torch", #  replace for cuda: f"torch=={torch.__version__}" for cpu: "torch",
                     "torchvision",
                     "Pillow",
                     "numpy",
