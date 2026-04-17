@@ -4,4 +4,4 @@ build_dependencies:
 - setuptools==82.0.0
 - wheel==0.40.0
 dependencies:
-- -r cpu-requirements.txt
+- -r requirements.txt # for cpu: cpu-requirements.txt | for gpu: requirements.txt
