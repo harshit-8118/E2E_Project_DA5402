@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DermAI Auth</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="login_style.css">
+</head>
+<body class="auth-body">
+  <main class="auth-shell">
+    <section class="auth-hero">
+      <div class="hero-badge">DermAI Platform</div>
+      <h1>Secure access for skin disease analysis.</h1>
+      <p>Sign in to continue your workflow, or create an account and verify your email before entering the application.</p>
+      <div class="hero-note">
+        <span class="hero-note-dot"></span>
+        Authentication keeps the app screen locked until credentials are valid.
+      </div>
+    </section>
+
+    <section class="card auth-card">
+      <div class="brand">
+        <div class="brand-mark">DA</div>
+        <h1>Derm<span>AI</span></h1>
+        <p>Skin Disease Detection System</p>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="login" type="button">Login</button>
+        <button class="tab" data-tab="signup" type="button">Sign Up</button>
+      </div>
+
+      <div id="msg" class="msg" role="status" aria-live="polite"></div>
+
+      <form id="loginForm" class="form">
+        <div class="field">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" placeholder="********" autocomplete="current-password">
+        </div>
+        <button class="btn" id="loginBtn" type="submit">Login</button>
+      </form>
+
+      <section id="signupForm" class="form hidden-block">
+        <div id="step1">
+          <form id="signupDetailsForm" class="form">
+            <div class="field">
+              <label for="suUsername">Username</label>
+              <input type="text" id="suUsername" placeholder="your_username" autocomplete="username">
+            </div>
+            <div class="field">
+              <label for="suEmail">Email</label>
+              <input type="email" id="suEmail" placeholder="you@example.com" autocomplete="email">
+            </div>
+            <div class="field">
+              <label for="suPassword">Password</label>
+              <input type="password" id="suPassword" placeholder="Min 8 characters" autocomplete="new-password">
+            </div>
+            <div class="field">
+              <label for="suGender">Gender</label>
+              <select id="suGender">
+                <option value="prefer_not_to_say">Prefer not to say</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <button class="btn" id="signupBtn" type="submit">Create Account & Send OTP</button>
+          </form>
+        </div>
+
+        <div id="step2" class="hidden-block">
+          <form id="otpForm" class="form">
+            <p class="otp-copy">
+              A 6-digit OTP was sent to <strong id="otpEmail"></strong>
+            </p>
+            <div class="field">
+              <label for="otpInput">Enter OTP</label>
+              <div class="otp-wrap">
+                <input type="text" id="otpInput" placeholder="000000" maxlength="6" inputmode="numeric">
+                <button class="btn-otp" id="resendBtn" type="button">Resend</button>
+              </div>
+            </div>
+            <button class="btn" id="verifyBtn" type="submit">Verify & Continue</button>
+            <button class="btn btn-secondary" id="backBtn" type="button">Back</button>
+          </form>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script src="config.js"></script>
+  <script src="auth.js"></script>
+</body>
+</html>

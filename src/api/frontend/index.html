@@ -1,346 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>DermAI — Skin Disease Detection</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet"/>
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DermAI - Skin Disease Detection</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="login_style.css">
 </head>
 <body>
-<div class="container">
-  <!-- header -->
-  <header>
-    <div class="logo">
-      <div class="logo-mark">DA</div>
-      <div class="logo-text">Derm<span>AI</span></div>
-    </div>
-    <div class="status-pill">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">Checking...</span>
-    </div>
-  </header>
-
-  <!-- hero -->
-  <div class="hero">
-    <h1>Skin Disease<br/><em>Detection</em> & Analysis</h1>
-    <p>Upload a dermoscopic image to receive an AI-powered classification with visual explanation and clinical guidance.</p>
-  </div>
-
-  <!-- upload section -->
-  <div class="upload-section" id="uploadSection">
-    <div class="upload-zone" id="dropZone">
-      <input type="file" id="fileInput" accept="image/*"/>
-      <div class="upload-icon">🔬</div>
-      <h3>Drop your image here</h3>
-      <p>or <span class="browse" onclick="document.getElementById('fileInput').click()">browse files</span> &nbsp;·&nbsp; JPG, PNG, WebP</p>
-    </div>
-
-    <div class="preview-wrap" id="previewWrap">
-      <img id="previewImg" class="preview-img" src="" alt="Preview"/>
-      <div class="preview-info">
-        <h4 id="fileName">image.jpg</h4>
-        <p id="fileSize">—</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-primary" id="analyzeBtn" onclick="runAnalysis()">
-            <span>Analyze Image</span>
-          </button>
-          <button class="btn btn-ghost btn-sm" onclick="resetAll()">Clear</button>
-        </div>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <div class="logo-mark">DA</div>
+        <div class="logo-text">Derm<span>AI</span></div>
       </div>
+      <div class="header-actions">
+        <div class="status-pill">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Checking...</span>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="logoutBtn" type="button">Logout</button>
+      </div>
+    </header>
+
+    <div class="hero">
+      <h1>Skin Disease<br><em>Detection</em> & Analysis</h1>
+      <p>Upload a dermoscopic image to receive an AI-powered classification with visual explanation and clinical guidance.</p>
     </div>
-  </div>
 
-  <!-- spinner -->
-  <div class="spinner-wrap" id="spinnerWrap">
-    <div class="spinner"></div>
-    <p id="spinnerMsg">Running inference...</p>
-  </div>
+    <div class="upload-section" id="uploadSection">
+      <div class="upload-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="image/*">
+        <div class="upload-icon">Scan</div>
+        <h3>Drop your image here</h3>
+        <p>or <span class="browse" id="browseTrigger">browse files</span> - JPG, PNG, WebP</p>
+      </div>
 
-  <!-- error -->
-  <div class="error-box" id="errorBox"></div>
-
-  <!-- results -->
-  <div class="results" id="results">
-
-    <div class="results-grid">
-      <!-- images -->
-      <div class="card">
-        <div class="card-label">Visual Explanation</div>
-        <div class="img-row">
-          <div class="img-box">
-            <span>Original</span>
-            <img id="origImg" src="" alt="Original"/>
-          </div>
-          <div class="img-box">
-            <span>Grad-CAM</span>
-            <img id="gradcamImg" src="" alt="Grad-CAM"/>
+      <div class="preview-wrap" id="previewWrap">
+        <img id="previewImg" class="preview-img" src="" alt="Preview">
+        <div class="preview-info">
+          <h4 id="fileName">image.jpg</h4>
+          <p id="fileSize">-</p>
+          <div class="button-row">
+            <button class="btn btn-primary" id="analyzeBtn" type="button">
+              <span>Analyze Image</span>
+            </button>
+            <button class="btn btn-ghost btn-sm" id="clearBtn" type="button">Clear</button>
           </div>
         </div>
       </div>
-
-      <!-- prediction -->
-      <div class="card">
-        <div class="card-label">Prediction</div>
-        <div class="pred-class" id="predClass">—</div>
-        <div id="riskBadge" class="risk-badge">—</div>
-        <div class="conf-bars" id="confBars"></div>
-        <div style="margin-top:16px;font-size:12px;color:var(--muted)" id="inferTime"></div>
-      </div>
     </div>
 
-    <div class="results-grid">
-      <!-- symptoms -->
-      <div class="card">
-        <div class="card-label">Common Symptoms</div>
-        <ul class="symptom-list" id="symptoms"></ul>
-      </div>
-
-      <!-- advisory -->
-      <div class="card">
-        <div class="card-label">Advisory & Sources</div>
-        <div class="advisory-text" id="advisory"></div>
-        <div class="sources" id="sources"></div>
-      </div>
+    <div class="spinner-wrap" id="spinnerWrap">
+      <div class="spinner"></div>
+      <p id="spinnerMsg">Running inference...</p>
     </div>
 
-    <!-- disclaimer -->
-    <div class="disclaimer">
-      ⚠️ <strong>Medical Disclaimer:</strong> <span id="disclaimer"></span>
-    </div>
+    <div class="error-box" id="errorBox"></div>
 
-    <!-- feedback -->
-    <div class="feedback-bar" id="feedbackBar">
-      <p>Was this prediction helpful or accurate?</p>
-      <div class="feedback-btns">
-        <button class="btn-feedback" id="thumbUp"   onclick="submitFeedback('thumbs_up')">👍 Yes</button>
-        <button class="btn-feedback" id="thumbDown" onclick="submitFeedback('thumbs_down')">👎 No</button>
+    <div class="results" id="results">
+      <div class="results-grid">
+        <div class="card app-card">
+          <div class="card-label">Visual Explanation</div>
+          <div class="img-row">
+            <div class="img-box">
+              <span>Original</span>
+              <img id="origImg" src="" alt="Original">
+            </div>
+            <div class="img-box">
+              <span>Grad-CAM</span>
+              <img id="gradcamImg" src="" alt="Grad-CAM">
+            </div>
+          </div>
+        </div>
+
+        <div class="card app-card">
+          <div class="card-label">Prediction</div>
+          <div class="pred-class" id="predClass">-</div>
+          <div id="riskBadge" class="risk-badge">-</div>
+          <div class="conf-bars" id="confBars"></div>
+          <div class="infer-time" id="inferTime"></div>
+        </div>
       </div>
-      <div class="feedback-thanks" id="feedbackThanks">✓ Thank you for your feedback</div>
-    </div>
 
-    <!-- reset -->
-    <div class="reset-row">
-      <button class="btn btn-ghost" onclick="resetAll()">← Analyze Another Image</button>
-    </div>
+      <div class="results-grid">
+        <div class="card app-card">
+          <div class="card-label">Common Symptoms</div>
+          <ul class="symptom-list" id="symptoms"></ul>
+        </div>
 
-  </div><!-- /results -->
-
-</div><!-- /container -->
-
-<footer>
-  DermAI &nbsp;·&nbsp; DA5402 MLOps Project &nbsp;·&nbsp; IIT Madras<br/>
-  <span style="font-size:12px;margin-top:4px;display:block">Not a substitute for professional medical diagnosis</span>
-</footer>
-
-<script>
-const API = (window.API_URL || 'http://127.0.0.1:8000').replace(/\/$/, '');
-
-let currentPredictionId = null;
-let currentFile         = null;
-
-// ── status check ──────────────────────────────────────────────────────────────
-async function checkStatus() {
-  const dot  = document.getElementById('statusDot');
-  const text = document.getElementById('statusText');
-  try {
-    const res = await fetch(`${API}/ready`, { signal: AbortSignal.timeout(3000) });
-    if (res.ok) {
-      dot.className  = 'status-dot online';
-      text.textContent = 'API Ready';
-    } else {
-      dot.className  = 'status-dot';
-      text.textContent = 'Model Loading...';
-    }
-  } catch {
-    dot.className  = 'status-dot';
-    text.textContent = 'API Offline';
-  }
-}
-checkStatus();
-setInterval(checkStatus, 15000);
-
-// ── drag & drop ───────────────────────────────────────────────────────────────
-const dropZone = document.getElementById('dropZone');
-
-dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
-dropZone.addEventListener('drop', e => {
-  e.preventDefault();
-  dropZone.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) handleFile(file);
-});
-dropZone.addEventListener('click', () => document.getElementById('fileInput').click());
-document.getElementById('fileInput').addEventListener('change', e => {
-  if (e.target.files[0]) handleFile(e.target.files[0]);
-});
-
-function handleFile(file) {
-  currentFile = file;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    document.getElementById('previewImg').src = ev.target.result;
-    document.getElementById('origImg').src    = ev.target.result;
-  };
-  reader.readAsDataURL(file);
-
-  document.getElementById('fileName').textContent = file.name;
-  document.getElementById('fileSize').textContent = `${(file.size / 1024).toFixed(1)} KB · ${file.type}`;
-
-  show('previewWrap', 'flex');
-  hide('dropZone');
-  hide('results');
-  hide('errorBox');
-}
-
-// ── analysis ──────────────────────────────────────────────────────────────────
-async function runAnalysis() {
-  if (!currentFile) return;
-
-  const btn = document.getElementById('analyzeBtn');
-  btn.disabled = true;
-  btn.querySelector('span').textContent = 'Analyzing...';
-
-  hide('results');
-  hide('errorBox');
-  show('spinnerWrap', 'flex');
-  spinMsg('Preprocessing image...');
-
-  try {
-    const formData = new FormData();
-    formData.append('file', currentFile);
-
-    spinMsg('Running inference...');
-    const res  = await fetch(`${API}/predict`, { method: 'POST', body: formData });
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || `Server error ${res.status}`);
-    }
-
-    spinMsg('Generating Grad-CAM...');
-    const data = await res.json();
-
-    renderResults(data);
-
-  } catch (err) {
-    showError(err.message || 'An unexpected error occurred.');
-  } finally {
-    hide('spinnerWrap');
-    btn.disabled = false;
-    btn.querySelector('span').textContent = 'Analyze Image';
-  }
-}
-
-function renderResults(d) {
-  currentPredictionId = d.prediction_id;
-
-  // images
-  document.getElementById('gradcamImg').src = d.gradcam_image || '';
-
-  // prediction
-  document.getElementById('predClass').textContent = d.display_name;
-
-  const rb = document.getElementById('riskBadge');
-  const icons = { HIGH: '🔴', MEDIUM: '🟡', LOW: '🟢' };
-  rb.className  = `risk-badge risk-${d.risk_level}`;
-  rb.textContent = `${icons[d.risk_level] || ''} ${d.risk_level} RISK`;
-
-  // confidence bars
-  const scores = Object.entries(d.all_scores).sort((a,b) => b[1]-a[1]);
-  const topCls = d.predicted_class;
-  document.getElementById('confBars').innerHTML = scores.map(([cls, val]) => `
-    <div class="conf-row">
-      <span class="cls-name">${cls}</span>
-      <div class="conf-track">
-        <div class="conf-fill ${cls === topCls ? 'top' : ''}" style="width:${Math.round(val*100)}%"></div>
+        <div class="card app-card">
+          <div class="card-label">Advisory & Sources</div>
+          <div class="advisory-text" id="advisory"></div>
+          <div class="sources" id="sources"></div>
+        </div>
       </div>
-      <span class="conf-val">${(val*100).toFixed(1)}%</span>
-    </div>`).join('');
 
-  // inference time
-  document.getElementById('inferTime').textContent =
-    `Inference: ${d.inference_ms}ms · Total: ${d.total_ms}ms`;
+      <div class="disclaimer">
+        <strong>Medical Disclaimer:</strong> <span id="disclaimer"></span>
+      </div>
 
-  // symptoms
-  document.getElementById('symptoms').innerHTML =
-    d.symptoms.map(s => `<li>${s}</li>`).join('');
+      <div class="feedback-bar" id="feedbackBar">
+        <p>Was this prediction helpful or accurate?</p>
+        <div class="feedback-btns">
+          <button class="btn-feedback" id="thumbUp" type="button">Yes</button>
+          <button class="btn-feedback" id="thumbDown" type="button">No</button>
+        </div>
+        <div class="feedback-thanks" id="feedbackThanks">Thank you for your feedback.</div>
+      </div>
 
-  // advisory
-  document.getElementById('advisory').textContent = d.advisory;
+      <div class="reset-row">
+        <button class="btn btn-ghost" id="resetBtn" type="button">Analyze Another Image</button>
+      </div>
+    </div>
+  </div>
 
-  // sources
-  document.getElementById('sources').innerHTML =
-    d.sources.map(s => `<a href="${s.url}" target="_blank" class="source-link">↗ ${s.name}</a>`).join('');
+  <footer>
+    DermAI - DA5402 MLOps Project - IIT Madras
+    <span>Not a substitute for professional medical diagnosis</span>
+  </footer>
 
-  // disclaimer
-  document.getElementById('disclaimer').textContent = d.disclaimer;
-
-  // reset feedback state
-  document.getElementById('thumbUp').className   = 'btn-feedback';
-  document.getElementById('thumbDown').className = 'btn-feedback';
-  document.getElementById('thumbUp').disabled    = false;
-  document.getElementById('thumbDown').disabled  = false;
-  hide('feedbackThanks');
-
-  show('results', 'block');
-  document.getElementById('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-// ── feedback ──────────────────────────────────────────────────────────────────
-async function submitFeedback(vote) {
-  if (!currentPredictionId) return;
-
-  document.getElementById('thumbUp').disabled   = true;
-  document.getElementById('thumbDown').disabled = true;
-
-  if (vote === 'thumbs_up')
-    document.getElementById('thumbUp').classList.add('active-up');
-  else
-    document.getElementById('thumbDown').classList.add('active-down');
-
-  try {
-    await fetch(`${API}/feedback`, {
-      method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body   : JSON.stringify({ prediction_id: currentPredictionId, vote }),
-    });
-    show('feedbackThanks', 'flex');
-  } catch {
-    // silent fail — feedback is non-critical
-  }
-}
-
-// ── utils ─────────────────────────────────────────────────────────────────────
-function resetAll() {
-  currentFile         = null;
-  currentPredictionId = null;
-  document.getElementById('fileInput').value = '';
-  show('dropZone', 'flex');
-  hide('previewWrap');
-  hide('spinnerWrap');
-  hide('results');
-  hide('errorBox');
-}
-
-function show(id, display = 'block') {
-  document.getElementById(id).style.display = display;
-}
-
-function hide(id) {
-  document.getElementById(id).style.display = 'none';
-}
-
-function spinMsg(msg) {
-  document.getElementById('spinnerMsg').textContent = msg;
-}
-
-function showError(msg) {
-  const box = document.getElementById('errorBox');
-  box.textContent = `Error: ${msg}`;
-  box.style.display = 'block';
-}
-</script>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
