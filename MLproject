@@ -15,7 +15,7 @@ entry_points:
         type: float
         default: 0.15
       random_seed:
-        type: float
+        type: int
         default: 42
     command: "python -m src.data_proc.prepare --val_size {val_size} --random_seed {random_seed}"
 
@@ -91,15 +91,4 @@ entry_points:
       --acceptance_macro_f1 {acceptance_macro_f1}
 
   # ── serve API ───────────────────────────────────────────────────────────────
-  serve:
-    parameters:
-      host:
-        type: str
-        default: "127.0.0.1"
-      port:
-        type: float
-        default: 8000
-      workers:
-        type: float
-        default: 2
-    command: "uvicorn src.api.main:app --host {host} --port {port} --workers {workers}"
+  # manual serve from CPU machine

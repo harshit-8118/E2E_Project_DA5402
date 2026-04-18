@@ -3,6 +3,7 @@
 
 import os
 import json
+import argparse
 import yaml
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -68,9 +69,21 @@ def compute_class_weights(counts: dict) -> dict:
     }
 
 
+def parse_arguments(p):
+    parser = argparse.ArgumentParser(description="Train skin disease detection model")
+
+    parser.add_argument("--val_size", type=float, default=p["val_size"])
+    parser.add_argument("--random_seed", type=int, default=int(p["random_seed"]))
+    
+    return parser.parse_args()
+
 def main():
     params = load_params()
     logger.info("Starting prepare stage")
+
+    args = parse_arguments(params)
+    if args.val_size is not None: params["val_size"] = args.val_size
+    if args.random_seed is not None: params["random_seed"] = args.random_seed
 
     # ── load train metadata ────────────────────────────────────────────────────
     df = pd.read_csv(params["metadata_path"])
@@ -123,10 +136,10 @@ def main():
     test_df  = df_test[cols].reset_index(drop=True)
 
     # ── save splits ────────────────────────────────────────────────────────────
-    os.makedirs("data/processed", exist_ok=True)
-    train_df.to_csv("data/processed/train.csv", index=False)
-    val_df.to_csv("data/processed/val.csv",     index=False)
-    test_df.to_csv("data/processed/test.csv",   index=False)
+    os.makedirs(params["processed_dir"], exist_ok=True)
+    train_df.to_csv(os.path.join(params["processed_dir"], params["processed_train_csv"]), index=False)
+    val_df.to_csv(os.path.join(params["processed_dir"], params["processed_val_csv"]),     index=False)
+    test_df.to_csv(os.path.join(params["processed_dir"], params["processed_test_csv"]),   index=False)
     logger.info("Saved splits to data/processed/")
 
     # ── prepare summary — tracked as DVC metric ────────────────────────────────
@@ -142,8 +155,8 @@ def main():
         "unique_val_lesions"  : val_df["lesion_id"].nunique(),
     }
 
-    os.makedirs("data/reports", exist_ok=True)
-    with open("data/reports/prepare_summary.json", "w") as f:
+    os.makedirs(params["reports_dir"], exist_ok=True)
+    with open(params["prepare_summary_report"], "w") as f:
         json.dump(summary, f, indent=2)
     logger.info(f"Train dist : {train_counts}")
 
@@ -151,12 +164,13 @@ def main():
     baseline = {
         "class_distribution": train_counts,
         "total_train_samples": len(train_df),
-        "class_weights"      : compute_class_weights(train_counts),
+        "class_weights" : compute_class_weights(train_counts),
     }
 
-    with open("data/reports/baseline_stats.json", "w") as f:
+    baseline_stats_path = params["baseline_stats_report"]
+    with open(baseline_stats_path, "w") as f:
         json.dump(baseline, f, indent=2)
-    logger.info("Saved baseline_stats.json")
+    logger.info(f"Saved {baseline_stats_path}")
 
 
 if __name__ == "__main__":

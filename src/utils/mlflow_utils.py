@@ -8,7 +8,7 @@ from mlflow.tracking import MlflowClient
 from dotenv import load_dotenv
 from src.utils.logger import get_logger
 
-uri = os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow")
+uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 
 load_dotenv()
 logger = get_logger("mlflow_utils")

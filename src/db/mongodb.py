@@ -22,7 +22,7 @@ except ImportError:
     logger.warning("pymongo not installed — MongoDB disabled")
 
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB  = os.getenv("MONGO_DB",  "skin_disease_detection")
+MONGO_DB  = os.getenv("MONGO_DB",  "CUSTOM_DB_NAME")
 
 
 def hash_password(password: str) -> str:

@@ -208,18 +208,18 @@ WARNING (batched email, repeat every 2h):
 Service              Port    ENV variable
 ──────────────────────────────────────────
 FastAPI backend      8000    API_PORT
-Frontend             3000    FRONTEND_PORT
+Frontend             7500    FRONTEND_PORT
 MLflow server        5001    MLFLOW_PORT
 Prometheus           9090    PROMETHEUS_PORT
-Grafana              3001    GRAFANA_PORT
+Grafana              3000    GRAFANA_PORT
 AlertManager         9093    ALERTMANAGER_PORT
 MongoDB              27017   MONGODB_PORT
-Node Exporter        9100    NODE_EXPORTER_PORT
+Node Exporter        9182    NODE_EXPORTER_PORT
 
 If any port is taken on shared machine, change in .env and update prometheus.yml targets.
 
 Check free ports:
-    for port in 8000 3000 5001 9090 3001 9093 27017; do
+    for port in 8000 7500 5001 9090 3000 9093 27017; do
         lsof -i :$port > /dev/null 2>&1 && echo "$port IN USE" || echo "$port FREE"
     done
 

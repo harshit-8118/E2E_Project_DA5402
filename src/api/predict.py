@@ -34,7 +34,7 @@ logger = get_logger("predict")
 
 router = APIRouter(tags=["Inference"])
 
-MLFLOW_SERVER    = os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow")
+MLFLOW_SERVER    = os.getenv("MLFLOW_TRACKING_URI", "")
 USE_REMOTE_MODEL = os.getenv("USE_REMOTE_MODEL", "false").lower() == "true"
 CLASS_NAMES  = ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"]
 

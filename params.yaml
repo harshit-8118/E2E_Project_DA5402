@@ -6,6 +6,18 @@ prepare:
   metadata_path: data/raw/HAM10000_metadata.csv
   test_metadata_path: data/raw/ISIC2018_Task3_Test_GroundTruth.csv
   test_images_dir: data/raw/test_images
+  segment_images_dir: data/raw/segmentations
+  processed_dir: data/processed
+  processed_train_csv: train.csv
+  processed_val_csv: val.csv
+  processed_test_csv: test.csv
+  reports_dir: data/reports
+  prepare_summary_report: data/reports/prepare_summary.json
+  baseline_stats_report: data/reports/baseline_stats.json
+  raw_data_summary: data/reports/raw_data_summary.csv
+  class_distribution: data/reports/class_distribution.csv
+  file_check_summary: data/reports/file_check_summary.csv
+  image_stats: data/reports/image_stats.csv
 
 train:
   device: cuda # cpu | cuda for training
@@ -26,7 +38,15 @@ train:
   cutmix_alpha: 0.0
   label_smoothing: 0.0
   use_amp: true # true for cuda | false for cpu
+  metrics_dir: outputs/metrics
+  train_history_path: outputs/metrics/train_history.json
+  mlflow_runid_path: outputs/metrics/mlflow_run_id.txt
 
 evaluate:
   acceptance_macro_f1: 0.75    # minimum to register model
   model_path: outputs/models/best_model.pth
+  plots_path: outputs/plots
+  confusion_mat_path: outputs/plots/confusion_matrix.png
+  eval_metrics_path: outputs/metrics/eval_metrics.json
+  gradcam_path: outputs/plots/gradcam
+  classification_report_path: outputs/metrics/classification_report.txt

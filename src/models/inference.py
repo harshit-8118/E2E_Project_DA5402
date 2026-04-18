@@ -135,6 +135,7 @@ def main():
 
     tp = p["train"]
     ep = p["evaluate"]
+    pp = p["prepare"]
 
     args = parse_arguments(tp, ep)
 
@@ -176,7 +177,8 @@ def main():
 
     # ── test dataloader ────────────────────────────────────────────────────────
     _, val_tf = get_transforms(tp["image_size"])
-    test_ds   = SkinDataset("data/processed/test.csv", val_tf, label_to_idx)
+
+    test_ds   = SkinDataset(os.path.join(pp["processed_dir"], pp["processed_test_csv"]), val_tf, label_to_idx)
     test_loader = DataLoader(test_ds, batch_size=tp["batch_size"],
                              shuffle=False, num_workers=tp["num_workers"])
 
@@ -206,30 +208,30 @@ def main():
     logger.info(f"Test macro F1: {overall['macro_f1']}")
 
     # ── save metrics json — used by Prometheus later ───────────────────────────
-    os.makedirs("outputs/metrics", exist_ok=True)
+    os.makedirs(tp["metrics_dir"], exist_ok=True)
     eval_metrics = {
         **overall,
         "per_class_f1"        : per_class_f1,
         "per_class_mistake_pct": mistake_pct,
     }
-    with open("outputs/metrics/eval_metrics.json", "w") as f:
+    with open(ep["eval_metrics_path"], "w") as f:
         json.dump(eval_metrics, f, indent=2)
 
     # ── confusion matrix plot ──────────────────────────────────────────────────
-    os.makedirs("outputs/plots", exist_ok=True)
-    plot_confusion_matrix(cm, CLASS_NAMES, "outputs/plots/confusion_matrix.png")
+    os.makedirs(ep["plots_path"], exist_ok=True)
+    plot_confusion_matrix(cm, CLASS_NAMES, ep["confusion_mat_path"])
 
     # ── gradcam samples ────────────────────────────────────────────────────────
     generate_gradcam_samples(
         model, test_ds, label_to_idx, device,
-        save_dir="outputs/plots/gradcam", tp=tp
+        save_dir=ep["gradcam_path"], tp=tp
     )
 
     # ── mlflow logging ─────────────────────────────────────────────────────────
 
     env_run_id  = os.environ.get("MLFLOW_RUN_ID", None)
     file_run_id = None
-    run_id_path = "outputs/metrics/mlflow_run_id.txt"
+    run_id_path = tp["mlflow_runid_path"]
     if os.path.exists(run_id_path):
         file_run_id = open(run_id_path).read().strip()
 
@@ -238,7 +240,7 @@ def main():
 
     if active_run_id == env_run_id and env_run_id is not None:
         print(f"Resuming MLflow Run: {active_run_id}")
-        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow"))
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
     else:
         print(f"Starting a new MLflow Run")
         setup_mlflow("skin-disease-detection")
@@ -267,12 +269,12 @@ def main():
         log_per_class_metrics(mistake_pct, prefix="test_mistake_pct")
 
         # artifacts
-        mlflow.log_artifact("outputs/plots/confusion_matrix.png")
-        mlflow.log_artifact("outputs/metrics/eval_metrics.json")
-        mlflow.log_artifacts("outputs/plots/gradcam", artifact_path="gradcam")
+        mlflow.log_artifact(ep["confusion_mat_path"])
+        mlflow.log_artifact(ep["eval_metrics_path"])
+        mlflow.log_artifacts(ep["gradcam_path"], artifact_path="gradcam")
 
         # log classification report as text artifact
-        report_path = "outputs/metrics/classification_report.txt"
+        report_path = ep["classification_report_path"]
         with open(report_path, "w") as f:
             f.write(report)
         mlflow.log_artifact(report_path)

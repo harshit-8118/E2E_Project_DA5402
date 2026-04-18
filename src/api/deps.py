@@ -17,7 +17,7 @@ try:
 except ImportError:
     JWT_AVAILABLE = False
 
-SECRET_KEY      = os.getenv("JWT_SECRET_KEY", "dermai-secret-change-in-production")
+SECRET_KEY      = os.getenv("JWT_SECRET_KEY", "JWT_SECERET_KEY_FROM_ENV")
 ALGORITHM       = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", 60))
 

@@ -178,6 +178,7 @@ def main():
 
     tp = p["train"]
     pp = p["prepare"]
+    ep = p["evaluate"]
 
     args = parse_arguments(tp)
 
@@ -207,8 +208,8 @@ def main():
     # data
     train_tf, val_tf = get_transforms(tp["image_size"])
 
-    train_ds = SkinDataset("data/processed/train.csv", train_tf, label_to_idx)
-    val_ds   = SkinDataset("data/processed/val.csv",   val_tf,   label_to_idx)
+    train_ds = SkinDataset(os.path.join(pp["processed_dir"], pp["processed_train_csv"]), train_tf, label_to_idx)
+    val_ds   = SkinDataset(os.path.join(pp["processed_dir"], pp["processed_val_csv"]),   val_tf,   label_to_idx)
 
     g = torch.Generator()
     g.manual_seed(tp["random_seed"])
@@ -228,7 +229,7 @@ def main():
         logger.info(f"GPU memory before: {torch.cuda.memory_allocated()/1024**3:.2f} GB")
 
     # weighted loss — handles class imbalance
-    class_weights = load_class_weights("data/reports/baseline_stats.json", CLASS_NAMES, device)
+    class_weights = load_class_weights(pp["baseline_stats_report"], CLASS_NAMES, device)
     criterion     = nn.CrossEntropyLoss(weight=class_weights if tp["use_weighted_loss"] else None, label_smoothing=tp["label_smoothing"])
 
     optimizer = torch.optim.AdamW(model.parameters(),
@@ -242,7 +243,7 @@ def main():
     os.makedirs("outputs/models", exist_ok=True)
     early_stop = EarlyStopping(
         patience=tp["early_stopping_patience"],
-        path="outputs/models/best_model.pth"
+        path=ep["model_path"]
     )
 
     # mlflow run
@@ -254,7 +255,7 @@ def main():
         print('-'*30)
         print(f"mlflow run injected run id: {active_run_id}")
         print('-'*30)
-        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow"))
+        mlflow.set_tracking_uri(os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000"))
     else:
         setup_mlflow("skin-disease-detection")
 
@@ -352,17 +353,17 @@ def main():
         })
 
         # save and log training history
-        os.makedirs("outputs/metrics", exist_ok=True)
-        history_path = "outputs/metrics/train_history.json"
+        os.makedirs(tp["metrics_dir"], exist_ok=True)
+        history_path = tp["train_history_path"]
         with open(history_path, "w") as f:
             json.dump(train_history, f, indent=2)
         mlflow.log_artifact(history_path)
 
         # log best model as artifact
-        mlflow.log_artifact("outputs/models/best_model.pth")
+        mlflow.log_artifact(ep["model_path"])
 
         # save run_id for evaluate.py to pick up
-        with open("outputs/metrics/mlflow_run_id.txt", "w") as f:
+        with open(tp["mlflow_runid_path"], "w") as f:
             f.write(run.info.run_id)
 
         logger.info(f"Training complete | best_val_macro_f1={best_val_f1:.4f} at epoch {best_epoch}")
