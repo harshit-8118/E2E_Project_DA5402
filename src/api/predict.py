@@ -120,15 +120,15 @@ async def call_mlflow_server(tensor: torch.Tensor) -> np.ndarray:
         return np.array(res.json()["predictions"])
 
 
-def save_gradcam(result_b64):
-    try:
-        encoded_data = result_b64.split(",")[1]
-        img_bytes = base64.b64decode(encoded_data)
-        with open("archived/latest_gradcam.png", "wb") as f:
-            f.write(img_bytes)
-        print("✅ Success: Saved latest_gradcam.png to local directory")
-    except Exception as e:
-        print(f"❌ Failed to save local image: {e}")
+# def save_gradcam(result_b64):
+#     try:
+#         encoded_data = result_b64.split(",")[1]
+#         img_bytes = base64.b64decode(encoded_data)
+#         with open("archived/latest_gradcam.png", "wb") as f:
+#             f.write(img_bytes)
+#         print("Success: Saved latest_gradcam.png to local directory")
+#     except Exception as e:
+#         print(f"Failed to save local image: {e}")
 
 
 def run_gradcam(model, tensor, class_idx, np_img) -> str:

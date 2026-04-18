@@ -1,0 +1,242 @@
+# docker-compose.yml
+# DermAI Complete Stack — CPU only
+#
+# KEY FIXES:
+#   1. Frontend API URL uses host machine IP, not docker service name
+#      (browser JS runs on host, cannot resolve 'backend' hostname)
+#   2. MongoDB 6.0 (stable LTS, not 7.0 which has WiredTiger verbosity issues)
+#   3. Prometheus v2.51 (not v3.5 which changed inhibit_rules schema)
+#   4. Grafana 10.4 (not 12.x which broke WebSocket auth / token rotation)
+#   5. node-exporter listen address matches prometheus scrape port
+#   6. All monitoring files mounted as volumes (no rebuild needed for config changes)
+#   7. inhibit_rules removed from rules.yml (Prometheus-level config, not rule-level)
+#   8. Shared network declared explicitly
+#   9. Healthchecks on all critical services
+#
+# Usage:
+#   docker compose --env-file .env up -d
+#   docker compose --env-file .env up -d backend  (single service)
+#   docker compose logs backend -f
+#   docker compose down          (keep volumes)
+#   docker compose down -v       (delete volumes too — clears MongoDB data)
+#
+# After start:
+#   Frontend    → http://localhost:7500
+#   API docs    → http://localhost:8000/docs
+#   Grafana     → http://localhost:3005  (admin / admin)
+#   Prometheus  → http://localhost:9090
+#   Alertmanager→ http://localhost:9093
+
+networks:
+  dermai_net:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  prometheus_data:
+  grafana_data:
+
+services:
+
+  # ── MongoDB 6.0 LTS ──────────────────────────────────────────────────────────
+  # Data is stored in Docker named volume 'mongodb_data'
+  # Connect MongoDB Compass from host: mongodb://localhost:27017
+  # WiredTiger checkpoint logs are INFO level — normal operation, not errors
+  mongodb:
+    image: mongo:6.0.14
+    container_name: dermai-mongodb
+    restart: unless-stopped
+    ports:
+      - "${MONGODB_PORT:-27017}:27017"
+    volumes:
+      - mongodb_data:/data/db
+      # suppress verbose WiredTiger checkpoint logs
+      - ./docker/mongod.conf:/etc/mongod.conf:ro
+    command: ["mongod", "--config", "/etc/mongod.conf"]
+    networks:
+      - dermai_net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ── FastAPI Backend ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    container_name: dermai-backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Override MONGO_URI to use Docker service name (not localhost)
+      MONGO_URI:  "mongodb://mongodb:27017"
+      MONGO_DB:   "${MONGO_DB:-skin_disease_detection}"
+      DEVICE:     "${DEVICE:-cpu}"
+      API_PORT:   "${API_PORT:-8000}"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./outputs:/app/outputs:ro        # model weights — read only
+      - ./logs:/app/logs                 # log output
+      - ./archived:/app/archived         # gradcam saves
+    command: >
+      uvicorn src.api.main:app
+      --host 0.0.0.0
+      --port 8000
+      --workers 1
+      --log-level info
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - dermai_net
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s   # CPU model loading takes ~60s
+
+  # ── Frontend ──────────────────────────────────────────────────────────────────
+  # CRITICAL: API_URL must be the HOST-accessible URL (http://localhost:PORT)
+  # NOT http://backend:8000 — browser JS runs on host machine, not inside Docker
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: dermai-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-7500}:7500"
+    command: >
+      python src/api/serve_frontend.py
+      --port 7500
+      --api-url http://localhost:${API_PORT:-8000}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - dermai_net
+
+  # ── Alertmanager ─────────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: dermai-alertmanager
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=0.0.0.0:9093
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      # mounted — change alertmanager.yml without rebuild
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      - dermai_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9093/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Node Exporter ─────────────────────────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: dermai-node-exporter
+    restart: unless-stopped
+    command:
+      - --web.listen-address=0.0.0.0:9182
+    ports:
+      - "${NODE_EXPORTER:-9182}:9182"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    networks:
+      - dermai_net
+
+  # ── MongoDB Exporter ──────────────────────────────────────────────────────────
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40.0
+    container_name: dermai-mongodb-exporter
+    restart: unless-stopped
+    command:
+      - --mongodb.uri=mongodb://mongodb:27017
+      - --web.listen-address=0.0.0.0:9216
+      - --collect-all
+    ports:
+      - "9216:9216"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - dermai_net
+
+  # ── Prometheus v2.51 (stable, not v3.x) ──────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    container_name: dermai-prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+      - --web.listen-address=0.0.0.0:9090
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      # both mounted — edit prometheus.yml or rules.yml without rebuild
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      - backend
+      - alertmanager
+      - node-exporter
+      - mongodb-exporter
+    networks:
+      - dermai_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Grafana 10.4 LTS (not 12.x — WebSocket token rotation bug) ───────────────
+  grafana:
+    image: grafana/grafana:10.4.3
+    container_name: dermai-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER:          admin
+      GF_SECURITY_ADMIN_PASSWORD:      admin
+      GF_SERVER_HTTP_PORT:             3000
+      GF_USERS_ALLOW_SIGN_UP:          "false"
+      # Disable token rotation that causes 401 WebSocket errors
+      GF_AUTH_TOKEN_ROTATION_INTERVAL_MINUTES: "0"
+      GF_SERVER_SERVE_FROM_SUB_PATH:   "false"
+      GF_LOG_LEVEL:                    warn
+    ports:
+      - "${GRAFANA_PORT:-3005}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      # provisioning mounted — change datasources/dashboards without rebuild
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      # dashboard JSON mounted — update dashboard without rebuild
+      - ./monitoring/grafana_dashboard.json:/var/lib/grafana/dashboards/dermai-dashboard.json:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - dermai_net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

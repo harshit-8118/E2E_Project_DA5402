@@ -1,42 +1,31 @@
 # monitoring/rules.yml
-# Prometheus alerting rules — critical and moderate alerts
-# Categories: inference, memory, CPU, GPU, API, MongoDB
+# Prometheus alerting rules for DermAI
+# inhibit_rules MUST be top-level, not inside groups — Prometheus v2.x+ requirement
 
 groups:
 
-  # ── inference alerts ─────────────────────────────────────────────────────────
   - name: inference_alerts
     rules:
 
       - alert: HighInferenceLatency_Critical
-        expr: histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m])) > 3.0
+        expr: histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m])) > 5.0
         for: 2m
         labels:
           severity: critical
           category: inference
         annotations:
-          summary: "Critical: p95 inference latency > 3s"
-          description: "p95 inference latency is {{ $value | humanizeDuration }} — model may be overloaded or GPU is throttling."
+          summary: "Critical: p95 inference latency > 5s"
+          description: "p95 latency {{ $value | humanizeDuration }}. CPU may be overloaded."
 
-      - alert: HighInferenceLatency_Moderate
-        expr: histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m])) > 1.0
+      - alert: HighInferenceLatency_Warning
+        expr: histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m])) > 2.0
         for: 5m
         labels:
           severity: warning
           category: inference
         annotations:
-          summary: "Warning: p95 inference latency > 1s"
-          description: "p95 inference latency is {{ $value | humanizeDuration }} — consider checking GPU utilization."
-
-      - alert: HighErrorRate_Critical
-        expr: rate(errors_total[5m]) > 0.1
-        for: 2m
-        labels:
-          severity: critical
-          category: api
-        annotations:
-          summary: "Critical: API error rate > 0.1/s"
-          description: "API is generating {{ $value | humanize }} errors/second on endpoint {{ $labels.endpoint }}."
+          summary: "Warning: p95 inference latency > 2s"
+          description: "p95 latency {{ $value | humanizeDuration }}."
 
       - alert: ModelNotLoaded
         expr: model_loaded == 0
@@ -45,18 +34,18 @@ groups:
           severity: critical
           category: api
         annotations:
-          summary: "Critical: Model is not loaded"
-          description: "The ML model failed to load or crashed. API cannot serve predictions."
+          summary: "Critical: Model not loaded"
+          description: "ML model failed to load. API cannot serve predictions."
 
-      - alert: HighRiskPredictionSpike
-        expr: rate(high_risk_predictions_total[10m]) > 0.5
-        for: 5m
+      - alert: HighErrorRate
+        expr: rate(errors_total[5m]) > 0.1
+        for: 2m
         labels:
-          severity: warning
-          category: inference
+          severity: critical
+          category: api
         annotations:
-          summary: "Warning: High rate of melanoma predictions"
-          description: "Melanoma (HIGH risk) predictions at {{ $value | humanize }}/s — may indicate unusual input data."
+          summary: "Critical: API error rate > 0.1/s"
+          description: "{{ $value | humanize }} errors/s on {{ $labels.endpoint }}."
 
       - alert: LowPredictionConfidence
         expr: histogram_quantile(0.50, rate(prediction_confidence_bucket[10m])) < 0.4
@@ -65,10 +54,19 @@ groups:
           severity: warning
           category: inference
         annotations:
-          summary: "Warning: Median prediction confidence < 40%"
-          description: "Median model confidence is {{ $value | humanizePercentage }} — model may be receiving out-of-distribution images."
+          summary: "Warning: Median confidence < 40%"
+          description: "Model may be receiving out-of-distribution images."
 
-  # ── memory alerts ────────────────────────────────────────────────────────────
+      - alert: HighRiskPredictionSpike
+        expr: rate(high_risk_predictions_total[10m]) > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          category: inference
+        annotations:
+          summary: "Warning: High melanoma prediction rate"
+          description: "Melanoma predictions at {{ $value | humanize }}/s."
+
   - name: memory_alerts
     rules:
 
@@ -79,50 +77,19 @@ groups:
           severity: critical
           category: memory
         annotations:
-          summary: "Critical: System memory > 90%"
-          description: "System memory usage is at {{ $value }}%. Risk of OOM kill."
+          summary: "Critical: Memory > 90%"
+          description: "Memory at {{ $value }}%. Risk of OOM."
 
-      - alert: SystemMemory_Moderate
-        expr: system_memory_percent > 75
+      - alert: SystemMemory_Warning
+        expr: system_memory_percent > 78
         for: 5m
         labels:
           severity: warning
           category: memory
         annotations:
-          summary: "Warning: System memory > 75%"
-          description: "System memory usage is at {{ $value }}%."
+          summary: "Warning: Memory > 78%"
+          description: "Memory at {{ $value }}%."
 
-      - alert: GPUMemory_Critical
-        expr: gpu_memory_allocated_gb > 40
-        for: 2m
-        labels:
-          severity: critical
-          category: memory
-        annotations:
-          summary: "Critical: GPU memory > 40GB"
-          description: "GPU allocated memory is {{ $value | humanize }}GB — approaching A6000 limit of 48GB."
-
-      - alert: GPUMemory_Moderate
-        expr: gpu_memory_allocated_gb > 30
-        for: 5m
-        labels:
-          severity: warning
-          category: memory
-        annotations:
-          summary: "Warning: GPU memory > 30GB"
-          description: "GPU allocated memory is {{ $value | humanize }}GB."
-
-      - alert: RequestMemorySpike
-        expr: histogram_quantile(0.95, rate(request_memory_usage_mb_bucket[5m])) > 1000
-        for: 3m
-        labels:
-          severity: warning
-          category: memory
-        annotations:
-          summary: "Warning: p95 request memory > 1GB"
-          description: "Individual requests consuming {{ $value }}MB of memory."
-
-  # ── CPU alerts ───────────────────────────────────────────────────────────────
   - name: cpu_alerts
     rules:
 
@@ -133,30 +100,19 @@ groups:
           severity: critical
           category: cpu
         annotations:
-          summary: "Critical: System CPU > 90%"
-          description: "CPU utilization at {{ $value }}% for over 3 minutes."
+          summary: "Critical: CPU > 90%"
+          description: "CPU at {{ $value }}% for 3+ minutes."
 
-      - alert: SystemCPU_Moderate
-        expr: system_cpu_percent > 70
+      - alert: SystemCPU_Warning
+        expr: system_cpu_percent > 75
         for: 5m
         labels:
           severity: warning
           category: cpu
         annotations:
-          summary: "Warning: System CPU > 70%"
-          description: "CPU utilization sustained at {{ $value }}%."
+          summary: "Warning: CPU > 75%"
+          description: "CPU at {{ $value }}%."
 
-      - alert: RequestCPUSpike
-        expr: histogram_quantile(0.95, rate(request_cpu_usage_percent_bucket[5m])) > 60
-        for: 5m
-        labels:
-          severity: warning
-          category: cpu
-        annotations:
-          summary: "Warning: p95 per-request CPU > 60%"
-          description: "Individual requests consuming {{ $value }}% CPU — GradCAM or preprocessing may be the bottleneck."
-
-  # ── API health alerts ────────────────────────────────────────────────────────
   - name: api_alerts
     rules:
 
@@ -167,30 +123,64 @@ groups:
           severity: critical
           category: api
         annotations:
-          summary: "Critical: FastAPI backend is down"
-          description: "Prometheus cannot reach the FastAPI backend at /metrics endpoint."
+          summary: "Critical: FastAPI backend down"
+          description: "Prometheus cannot reach /metrics on backend."
 
       - alert: HighActiveRequests
-        expr: sum(active_requests) > 20
+        expr: sum(active_requests) > 10
         for: 2m
         labels:
           severity: warning
           category: api
         annotations:
-          summary: "Warning: > 20 concurrent requests"
-          description: "{{ $value }} concurrent requests — possible traffic spike or slow inference blocking queue."
+          summary: "Warning: > 10 concurrent requests"
+          description: "{{ $value }} concurrent requests active."
 
       - alert: NegativeFeedbackSpike
-        expr: rate(feedback_total{vote="thumbs_down"}[15m]) > rate(feedback_total{vote="thumbs_up"}[15m]) * 2
+        expr: |
+          (rate(feedback_total{vote="thumbs_down"}[15m]) /
+           (rate(feedback_total{vote="thumbs_up"}[15m]) + 0.001)) > 2
         for: 10m
         labels:
           severity: warning
           category: api
         annotations:
-          summary: "Warning: Negative feedback rate is 2x positive rate"
-          description: "Users are reporting predictions as incorrect at a high rate — model performance may have degraded."
+          summary: "Warning: Negative feedback 2x positive rate"
+          description: "Users marking predictions as incorrect frequently."
 
-  # ── MongoDB alerts ───────────────────────────────────────────────────────────
+  - name: user_abuse_alerts
+    rules:
+
+      - alert: UserRateLimitBreach
+        expr: increase(user_rate_limit_breach_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          category: abuse
+        annotations:
+          summary: "Warning: User exceeded request limit"
+          description: "User {{ $labels.username }} exceeded limit in last hour."
+
+      - alert: UserRateLimitBreach_Repeated
+        expr: increase(user_rate_limit_breach_total[1h]) > 3
+        for: 5m
+        labels:
+          severity: critical
+          category: abuse
+        annotations:
+          summary: "Critical: Repeated rate limit breach"
+          description: "User {{ $labels.username }} breached {{ $value }} times."
+
+      - alert: RegistrationSpike
+        expr: increase(users_registered_total[1h]) > 20
+        for: 0m
+        labels:
+          severity: warning
+          category: abuse
+        annotations:
+          summary: "Warning: > 20 registrations in 1 hour"
+          description: "Possible bot signup activity."
+
   - name: mongodb_alerts
     rules:
 
@@ -201,8 +191,8 @@ groups:
           severity: critical
           category: database
         annotations:
-          summary: "Critical: MongoDB is unreachable"
-          description: "MongoDB connection failed — feedback and prediction data is falling back to in-memory store."
+          summary: "Critical: MongoDB unreachable"
+          description: "Data falling back to in-memory. Data loss risk on restart."
 
       - alert: MongoDBDown_Sustained
         expr: mongodb_up == 0
@@ -211,5 +201,5 @@ groups:
           severity: critical
           category: database
         annotations:
-          summary: "Critical: MongoDB down for 5+ minutes"
-          description: "MongoDB has been unreachable for 5 minutes. All data will be lost on restart."
+          summary: "Critical: MongoDB down 5+ minutes"
+          description: "All in-memory data WILL BE LOST on backend restart."

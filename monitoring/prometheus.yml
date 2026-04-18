@@ -1,58 +1,49 @@
 # monitoring/prometheus.yml
-# Prometheus scrape configuration for skin disease detection project
+# All targets use Docker service names — works inside dermai_net network
+# node-exporter listens on 9182 (matches compose command)
 
 global:
-  scrape_interval:     15s   # scrape every 15 seconds
-  evaluation_interval: 15s   # evaluate rules every 15 seconds
+  scrape_interval:     15s
+  evaluation_interval: 15s
   scrape_timeout:      10s
-
   external_labels:
-    project: 'skin-disease-detection'
+    project:     'dermai'
     environment: 'development'
 
-# alertmanager connection
 alerting:
   alertmanagers:
     - static_configs:
-        - targets:
-            - alertmanager:9093   # docker service name
-          # for non-docker: - localhost:9093
+        - targets: ['alertmanager:9093']
+      timeout: 5s
 
-# load alert rules
 rule_files:
-  - "rules.yml"
+  - /etc/prometheus/rules.yml
 
-# scrape targets
 scrape_configs:
 
-  # ── FastAPI backend ──────────────────────────────────────────────────────────
   - job_name: 'fastapi_backend'
     static_configs:
-      - targets:
-          - backend:8000          # docker service name
-          # for non-docker: - localhost:8000
+      - targets: ['backend:8000']
     metrics_path: /metrics
     scrape_interval: 10s
-    scrape_timeout: 8s
+    scrape_timeout:  8s
 
-  # ── prometheus itself ────────────────────────────────────────────────────────
   - job_name: 'prometheus'
     static_configs:
-      - targets:
-          - localhost:9090
+      - targets: ['localhost:9090']
     scrape_interval: 30s
 
-  # ── node exporter — system metrics ──────────────────────────────────────────
   - job_name: 'node_exporter'
     static_configs:
-      - targets:
-          - node-exporter:9100    # docker service name
-          # for non-docker: - localhost:9100
+      - targets: ['node-exporter:9182']
     scrape_interval: 15s
 
-  # ── mongodb exporter ─────────────────────────────────────────────────────────
   - job_name: 'mongodb_exporter'
     static_configs:
-      - targets:
-          - mongodb-exporter:9216  # docker service name
+      - targets: ['mongodb-exporter:9216']
+    scrape_interval: 30s
+
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
     scrape_interval: 30s
