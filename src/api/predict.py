@@ -1,5 +1,12 @@
 # src/api/predict.py
 # Inference endpoints — /predict, /explain, /feedback
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(
+    dotenv_path=Path(__file__).resolve().parents[2] / ".env",
+    override=True
+)
 
 import io
 import os
@@ -9,7 +16,6 @@ import httpx
 import base64
 from typing import Optional
 from datetime import datetime
-from dotenv import load_dotenv
 
 import torch
 import psutil
@@ -29,7 +35,7 @@ from src.api import metrics as M
 import warnings
 warnings.filterwarnings("ignore")
 
-load_dotenv()
+
 logger = get_logger("predict")
 
 router = APIRouter(tags=["Inference"])

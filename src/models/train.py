@@ -1,5 +1,12 @@
 # src/models/train.py
 # training loop with mlflow logging, early stopping, weighted loss
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(
+    dotenv_path=Path(__file__).resolve().parents[2] / ".env",
+    override=True
+)
 
 import os
 import json
@@ -7,6 +14,7 @@ import yaml
 import torch
 import torch.nn as nn
 import random
+from dotenv import load_dotenv
 import mlflow
 import mlflow.pytorch
 import numpy as np

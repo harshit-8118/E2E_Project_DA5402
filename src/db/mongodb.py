@@ -1,5 +1,12 @@
 # src/db/mongodb.py
 # MongoDB client — users, predictions, feedback, images, otp_store
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(
+    dotenv_path=Path(__file__).resolve().parents[2] / ".env",
+    override=True
+)
 
 import os
 import uuid
@@ -7,10 +14,8 @@ import base64
 import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
-from dotenv import load_dotenv
 from src.utils.logger import get_logger
 
-load_dotenv()
 logger = get_logger("mongodb")
 
 try:

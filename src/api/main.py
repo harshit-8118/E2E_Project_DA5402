@@ -1,6 +1,13 @@
 # src/api/main.py
 # FastAPI app entry point — wires auth, predict, metrics routers
 # uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(
+    dotenv_path=Path(__file__).resolve().parents[2] / ".env",
+    override=True
+)
 
 import os
 import time
@@ -11,7 +18,6 @@ import torch
 import psutil
 import yaml
 import mlflow
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response
@@ -26,7 +32,6 @@ from src.api.predict import router as predict_router, set_app_state, CLASS_NAMES
 from src.utils.logger import get_logger
 from src.utils.reproducibility import set_seed
 
-load_dotenv()
 logger = get_logger("api")
 
 IMAGE_SIZE  = int(os.getenv("IMAGE_SIZE", 224))

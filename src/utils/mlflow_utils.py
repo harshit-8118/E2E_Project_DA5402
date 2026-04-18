@@ -1,16 +1,21 @@
 # src/utils/mlflow_utils.py
 # centralizes all mlflow setup and logging helpers
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(
+    dotenv_path=Path(__file__).resolve().parents[2] / ".env",
+    override=True
+)
 
 import os
 import subprocess
 import mlflow
 from mlflow.tracking import MlflowClient
-from dotenv import load_dotenv
 from src.utils.logger import get_logger
 
-uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 
-load_dotenv()
+uri = os.getenv("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
 logger = get_logger("mlflow_utils")
 
 def setup_mlflow(experiment_name: str) -> str:

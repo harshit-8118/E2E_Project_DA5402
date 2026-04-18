@@ -1,15 +1,21 @@
 # src/utils/email_otp.py
 # Gmail SMTP OTP sender for email verification
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(
+    dotenv_path=Path(__file__).resolve().parents[2] / ".env",
+    override=True
+)
 
 import os
 import random
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from dotenv import load_dotenv
 from src.utils.logger import get_logger
 
-load_dotenv()
+
 logger = get_logger("email_otp")
 
 GMAIL_USER     = os.getenv("SMTP_USERNAME",     "")

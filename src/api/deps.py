@@ -1,5 +1,12 @@
 # src/api/deps.py
 # Shared FastAPI dependencies — JWT auth, current user extraction
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv(
+    dotenv_path=Path(__file__).resolve().parents[2] / ".env",
+    override=True
+)
 
 import os
 from datetime import datetime, timedelta
@@ -7,9 +14,6 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from dotenv import load_dotenv
-
-load_dotenv()
 
 try:
     import jwt

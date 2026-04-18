@@ -1,6 +1,6 @@
 stages:
   prepare:
-    cmd: python3 -m src.data_proc.prepare
+    cmd: python -m src.data_proc.prepare
     deps:
       - src/data_proc/prepare.py
       - data/raw/HAM10000_metadata.csv
@@ -21,7 +21,7 @@ stages:
           cache: false
 
   train:
-    cmd: python3 -m src.models.train
+    cmd: python -m src.models.train
     deps:
       - src/models/train.py
       - src/models/model.py
@@ -44,7 +44,7 @@ stages:
           cache: false
 
   evaluate:
-    cmd: python3 -m src.models.inference
+    cmd: python -m src.models.inference
     deps:
       - src/models/inference.py
       - src/models/model.py                
