@@ -1,17 +1,12 @@
 # src/db/mongodb.py
-# MongoDB client — users, predictions, feedback, images, otp_store
-from pathlib import Path
-from dotenv import load_dotenv
-
-load_dotenv(
-    dotenv_path=Path(__file__).resolve().parents[2] / ".env",
-    override=True
-)
+# MongoDB client with auto-reconnect on every operation
+# No module-level connection attempt — connects lazily and retries on failure
 
 import os
 import uuid
 import base64
 import hashlib
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 from src.utils.logger import get_logger
@@ -19,15 +14,17 @@ from src.utils.logger import get_logger
 logger = get_logger("mongodb")
 
 try:
-    from pymongo import MongoClient, DESCENDING, ASCENDING
-    from pymongo.errors import DuplicateKeyError, ConnectionFailure
+    from pymongo import MongoClient, DESCENDING
+    from pymongo.errors import DuplicateKeyError, ConnectionFailure, ServerSelectionTimeoutError
     MONGO_AVAILABLE = True
 except ImportError:
     MONGO_AVAILABLE = False
     logger.warning("pymongo not installed — MongoDB disabled")
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB  = os.getenv("MONGO_DB",  "CUSTOM_DB_NAME")
+# read from environment directly — Docker passes these via env_file in compose
+# never rely on load_dotenv inside Docker containers
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB  = os.environ.get("MONGO_DB",  "skin_disease_detection")  # safe default
 
 
 def hash_password(password: str) -> str:
@@ -35,79 +32,105 @@ def hash_password(password: str) -> str:
 
 
 class MongoDB:
+    """
+    MongoDB client with lazy connection and automatic reconnect.
+    Every public method calls _ensure_connected() before operating.
+    This means the app keeps working even if MongoDB starts after the backend.
+    """
+
     def __init__(self):
         self.client    = None
         self.db        = None
         self.connected = False
-        self._connect()
+        self._last_attempt = 0
+        self._retry_interval = 5   # seconds between reconnect attempts
 
-    def _connect(self):
+    def _ensure_connected(self) -> bool:
+        """
+        Try to connect if not connected. Retries every 5 seconds.
+        Returns True if connected, False otherwise.
+        """
+        if self.connected and self.client:
+            try:
+                # fast ping to verify connection still alive
+                self.client.admin.command("ping")
+                return True
+            except Exception:
+                # connection dropped — reset and try below
+                self.connected = False
+                self.client    = None
+                self.db        = None
+
         if not MONGO_AVAILABLE:
-            return
+            return False
+
+        # rate-limit reconnect attempts
+        now = time.time()
+        if now - self._last_attempt < self._retry_interval:
+            return False
+
+        self._last_attempt = now
         try:
-            self.client    = MongoClient(MONGO_URI, serverSelectionTimeoutMS=3000)
+            self.client = MongoClient(
+                MONGO_URI,
+                serverSelectionTimeoutMS=5000,   # 5s timeout on connect
+                connectTimeoutMS=5000,
+                socketTimeoutMS=10000,
+            )
             self.client.admin.command("ping")
             self.db        = self.client[MONGO_DB]
             self.connected = True
-            logger.info(f"MongoDB connected | db={MONGO_DB}")
+            logger.info(f"MongoDB connected | uri={MONGO_URI} | db={MONGO_DB}")
             self._ensure_indexes()
+            return True
         except Exception as e:
             self.connected = False
-            logger.warning(f"MongoDB not reachable: {e}")
+            self.client    = None
+            self.db        = None
+            logger.warning(f"MongoDB connection failed (will retry): {e}")
+            return False
 
     def _ensure_indexes(self):
+        """Create indexes — called once after each successful connection."""
         try:
-            # users — unique username and email
             self.db.users.create_index("uid",      unique=True)
             self.db.users.create_index("email",    unique=True)
             self.db.users.create_index("username", unique=True)
 
-            # otp_store — TTL index expires docs after 600 seconds (10 min)
             self.db.otp_store.create_index("expires_at", expireAfterSeconds=0)
             self.db.otp_store.create_index("email")
 
-            # predictions
             self.db.predictions.create_index("prediction_id", unique=True)
             self.db.predictions.create_index("uid")
             self.db.predictions.create_index("username")
             self.db.predictions.create_index("timestamp")
             self.db.predictions.create_index("predicted_class")
 
-            # feedback
             self.db.feedback.create_index("prediction_id", unique=True)
             self.db.feedback.create_index("uid")
             self.db.feedback.create_index("username")
 
-            # images
             self.db.images.create_index("image_id",      unique=True)
             self.db.images.create_index("prediction_id")
             self.db.images.create_index("uid")
 
-            # rate limiting index — for 50 req/hour alert
             self.db.request_log.create_index("uid")
             self.db.request_log.create_index(
                 "timestamp",
-                expireAfterSeconds=3600   # auto-delete after 1 hour
+                expireAfterSeconds=3600
             )
-
-            logger.info("MongoDB indexes created")
+            logger.info("MongoDB indexes ready")
         except Exception as e:
-            logger.warning(f"Index creation failed: {e}")
+            logger.warning(f"Index creation warning (may already exist): {e}")
 
     def is_up(self) -> bool:
-        if not self.connected or not self.client:
-            return False
-        try:
-            self.client.admin.command("ping")
-            return True
-        except Exception:
-            return False
+        """Check connectivity — used by Prometheus gauge and /health endpoint."""
+        return self._ensure_connected()
 
     # ── users ──────────────────────────────────────────────────────────────────
 
     def create_user(self, username: str, email: str, password: str, gender: str) -> dict:
-        """Returns dict with success/error."""
-        if not self.connected:
+        if not self._ensure_connected():
             return {"success": False, "error": "Database not available"}
         try:
             uid = str(uuid.uuid4())
@@ -127,19 +150,15 @@ class MongoDB:
             return {"success": True, "uid": uid}
         except DuplicateKeyError as e:
             err = str(e)
-            if "email" in err:
-                return {"success": False, "error": "Email already registered"}
-            if "username" in err:
-                return {"success": False, "error": "Username already taken"}
+            if "email"    in err: return {"success": False, "error": "Email already registered"}
+            if "username" in err: return {"success": False, "error": "Username already taken"}
             return {"success": False, "error": "User already exists"}
         except Exception as e:
             logger.error(f"create_user failed: {e}")
             return {"success": False, "error": str(e)}
 
     def verify_user(self, email: str) -> bool:
-        """Mark user as email-verified."""
-        if not self.connected:
-            return False
+        if not self._ensure_connected(): return False
         try:
             self.db.users.update_one(
                 {"email": email.lower()},
@@ -151,23 +170,20 @@ class MongoDB:
             return False
 
     def get_user_by_email(self, email: str) -> Optional[dict]:
-        if not self.connected:
-            return None
+        if not self._ensure_connected(): return None
         try:
             return self.db.users.find_one({"email": email.lower()}, {"_id": 0})
         except Exception:
             return None
 
     def get_user_by_uid(self, uid: str) -> Optional[dict]:
-        if not self.connected:
-            return None
+        if not self._ensure_connected(): return None
         try:
             return self.db.users.find_one({"uid": uid}, {"_id": 0, "password_hash": 0})
         except Exception:
             return None
 
     def authenticate_user(self, email: str, password: str) -> Optional[dict]:
-        """Returns user doc if credentials valid and verified, else None."""
         user = self.get_user_by_email(email)
         if not user:
             return None
@@ -178,39 +194,34 @@ class MongoDB:
         return user
 
     def get_user_stats(self, uid: str) -> dict:
-        if not self.connected:
-            return {}
+        if not self._ensure_connected(): return {}
         try:
             user = self.db.users.find_one({"uid": uid}, {"_id": 0, "password_hash": 0})
-            if not user:
-                return {}
-            pred_count = self.db.predictions.count_documents({"uid": uid})
-            fb_count   = self.db.feedback.count_documents({"uid": uid})
-            img_count  = self.db.images.count_documents({"uid": uid})
+            if not user: return {}
             return {
                 **user,
-                "prediction_count": pred_count,
-                "feedback_count"  : fb_count,
-                "image_count"     : img_count,
+                "prediction_count": self.db.predictions.count_documents({"uid": uid}),
+                "feedback_count"  : self.db.feedback.count_documents({"uid": uid}),
+                "image_count"     : self.db.images.count_documents({"uid": uid}),
             }
         except Exception as e:
             logger.error(f"get_user_stats failed: {e}")
             return {}
 
     def get_all_users_count(self) -> int:
-        if not self.connected: return 0
+        if not self._ensure_connected(): return 0
         try:   return self.db.users.count_documents({})
         except: return 0
 
     def get_verified_users_count(self) -> int:
-        if not self.connected: return 0
+        if not self._ensure_connected(): return 0
         try:   return self.db.users.count_documents({"verified": True})
         except: return 0
 
     # ── OTP ────────────────────────────────────────────────────────────────────
 
     def save_otp(self, email: str, otp: str) -> bool:
-        if not self.connected: return False
+        if not self._ensure_connected(): return False
         try:
             expires_at = datetime.utcnow() + timedelta(minutes=10)
             self.db.otp_store.update_one(
@@ -224,11 +235,11 @@ class MongoDB:
             return False
 
     def verify_otp(self, email: str, otp: str) -> bool:
-        if not self.connected: return False
+        if not self._ensure_connected(): return False
         try:
             doc = self.db.otp_store.find_one({
-                "email": email.lower(),
-                "otp"  : otp,
+                "email"     : email.lower(),
+                "otp"       : otp,
                 "expires_at": {"$gt": datetime.utcnow()}
             })
             if doc:
@@ -242,15 +253,13 @@ class MongoDB:
     # ── rate limiting ──────────────────────────────────────────────────────────
 
     def log_request(self, uid: str, endpoint: str) -> int:
-        """Log request and return count in last hour."""
-        if not self.connected: return 0
+        if not self._ensure_connected(): return 0
         try:
             self.db.request_log.insert_one({
                 "uid"      : uid,
                 "endpoint" : endpoint,
                 "timestamp": datetime.utcnow(),
             })
-            # count in last hour
             one_hour_ago = datetime.utcnow() - timedelta(hours=1)
             return self.db.request_log.count_documents({
                 "uid"      : uid,
@@ -260,16 +269,6 @@ class MongoDB:
             logger.error(f"log_request failed: {e}")
             return 0
 
-    def get_requests_last_hour(self, uid: str) -> int:
-        if not self.connected: return 0
-        try:
-            one_hour_ago = datetime.utcnow() - timedelta(hours=1)
-            return self.db.request_log.count_documents({
-                "uid"      : uid,
-                "timestamp": {"$gte": one_hour_ago}
-            })
-        except: return 0
-
     # ── predictions ────────────────────────────────────────────────────────────
 
     def save_prediction(
@@ -278,9 +277,9 @@ class MongoDB:
         all_scores: dict, inference_ms: float,
         image_id: Optional[str] = None, image_filename: Optional[str] = None,
     ) -> bool:
-        if not self.connected: return False
+        if not self._ensure_connected(): return False
         try:
-            doc = {
+            self.db.predictions.insert_one({
                 "prediction_id"  : prediction_id,
                 "uid"            : uid,
                 "username"       : username,
@@ -292,8 +291,7 @@ class MongoDB:
                 "image_id"       : image_id,
                 "image_filename" : image_filename,
                 "timestamp"      : datetime.utcnow().isoformat(),
-            }
-            self.db.predictions.insert_one(doc)
+            })
             self.db.users.update_one(
                 {"uid": uid},
                 {"$inc": {"prediction_count": 1}}
@@ -304,7 +302,7 @@ class MongoDB:
             return False
 
     def get_user_predictions(self, uid: str, limit: int = 20) -> list:
-        if not self.connected: return []
+        if not self._ensure_connected(): return []
         try:
             return list(
                 self.db.predictions
@@ -315,7 +313,7 @@ class MongoDB:
         except: return []
 
     def get_prediction_stats(self) -> dict:
-        if not self.connected:
+        if not self._ensure_connected():
             return {"total_predictions": 0, "by_class": {}, "high_risk_total": 0}
         try:
             total    = self.db.predictions.count_documents({})
@@ -331,19 +329,17 @@ class MongoDB:
         self, uid: str, username: str, prediction_id: str,
         image_bytes: bytes, filename: str
     ) -> Optional[str]:
-        """Save image as base64 for future retraining. Returns image_id."""
-        if not self.connected: return None
+        if not self._ensure_connected(): return None
         try:
-            image_id  = str(uuid.uuid4())
-            b64_data  = base64.b64encode(image_bytes).decode("utf-8")
-            size_kb   = len(image_bytes) / 1024
+            image_id = str(uuid.uuid4())
+            size_kb  = len(image_bytes) / 1024
             self.db.images.insert_one({
                 "image_id"     : image_id,
                 "prediction_id": prediction_id,
                 "uid"          : uid,
                 "username"     : username,
                 "filename"     : filename or "unknown.jpg",
-                "image_b64"    : b64_data,
+                "image_b64"    : base64.b64encode(image_bytes).decode("utf-8"),
                 "image_size_kb": round(size_kb, 2),
                 "timestamp"    : datetime.utcnow().isoformat(),
             })
@@ -359,7 +355,7 @@ class MongoDB:
         self, prediction_id: str, uid: str, username: str,
         vote: str, comment: str = ""
     ) -> bool:
-        if not self.connected: return False
+        if not self._ensure_connected(): return False
         try:
             self.db.feedback.update_one(
                 {"prediction_id": prediction_id},
@@ -383,7 +379,7 @@ class MongoDB:
             return False
 
     def get_feedback_stats(self) -> dict:
-        if not self.connected:
+        if not self._ensure_connected():
             return {"total": 0, "thumbs_up": 0, "thumbs_down": 0, "positive_rate": 0.0}
         try:
             total = self.db.feedback.count_documents({})
@@ -399,7 +395,8 @@ class MongoDB:
     def close(self):
         if self.client:
             self.client.close()
-            logger.info("MongoDB closed")
+            logger.info("MongoDB connection closed")
 
 
+# singleton — created once at import, connects lazily on first use
 mongo = MongoDB()
