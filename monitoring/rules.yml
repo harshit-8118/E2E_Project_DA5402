@@ -1,6 +1,7 @@
 # monitoring/rules.yml
-# Prometheus alerting rules for DermAI
-# inhibit_rules MUST be top-level, not inside groups — Prometheus v2.x+ requirement
+# DermAI Alert Rules — strict thresholds for demo on HP Pavilion i5 16GB
+# Tuned to fire during moderate/rigorous testing
+# inhibit_rules belongs in alertmanager.yml only — NOT here
 
 groups:
 
@@ -8,198 +9,225 @@ groups:
     rules:
 
       - alert: HighInferenceLatency_Critical
-        expr: histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m])) > 5.0
-        for: 2m
+        expr: histogram_quantile(0.95, sum(rate(inference_latency_seconds_bucket[2m])) by (le)) > 4
+        for: 20s
         labels:
           severity: critical
           category: inference
         annotations:
-          summary: "Critical: p95 inference latency > 5s"
-          description: "p95 latency {{ $value | humanizeDuration }}. CPU may be overloaded."
+          summary: "Critical: inference p95 latency > 4s"
+          description: "Rigorous CPU testing is pushing p95 inference latency above 4 seconds."
 
       - alert: HighInferenceLatency_Warning
-        expr: histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m])) > 2.0
-        for: 5m
+        expr: histogram_quantile(0.95, sum(rate(inference_latency_seconds_bucket[2m])) by (le)) > 2
+        for: 20s
         labels:
           severity: warning
           category: inference
         annotations:
-          summary: "Warning: p95 inference latency > 2s"
-          description: "p95 latency {{ $value | humanizeDuration }}."
+          summary: "Warning: inference p95 latency > 2s"
+          description: "CPU-bound inference latency is elevated."
 
       - alert: ModelNotLoaded
         expr: model_loaded == 0
-        for: 1m
+        for: 20s
         labels:
           severity: critical
           category: api
         annotations:
           summary: "Critical: Model not loaded"
-          description: "ML model failed to load. API cannot serve predictions."
+          description: "ML model failed to load — all /predict calls will fail."
 
       - alert: HighErrorRate
-        expr: rate(errors_total[5m]) > 0.1
-        for: 2m
+        expr:  (
+            sum(rate(api_requests_total{status_code=~"4..|5.."}[2m]))
+            /
+            clamp_min(sum(rate(api_requests_total[2m])), 0.001)
+          ) > 0.05
+        for: 30s
         labels:
           severity: critical
           category: api
         annotations:
-          summary: "Critical: API error rate > 0.1/s"
-          description: "{{ $value | humanize }} errors/s on {{ $labels.endpoint }}."
+          summary: "Critical: API error ration > 5%"
+          description: "More than 5% of requests are returning 4xx/5xx responses."
 
       - alert: LowPredictionConfidence
-        expr: histogram_quantile(0.50, rate(prediction_confidence_bucket[10m])) < 0.4
-        for: 10m
+        expr: histogram_quantile(0.50, sum(rate(prediction_confidence_bucket[5m])) by (le)) < 0.50
+        for: 2m
         labels:
           severity: warning
           category: inference
         annotations:
-          summary: "Warning: Median confidence < 40%"
-          description: "Model may be receiving out-of-distribution images."
+          summary: "Warning: Median confidence < 55%"
+          description: "Model uncertain — possible OOD images."
 
       - alert: HighRiskPredictionSpike
-        expr: rate(high_risk_predictions_total[10m]) > 0.3
-        for: 5m
+        expr: rate(high_risk_predictions_total[5m]) > 0.1
+        for: 1m
         labels:
           severity: warning
           category: inference
         annotations:
-          summary: "Warning: High melanoma prediction rate"
-          description: "Melanoma predictions at {{ $value | humanize }}/s."
+          summary: "Warning: Melanoma prediction spike"
+          description: "Melanoma at {{ $value | humanize }}/s."
 
   - name: memory_alerts
     rules:
 
       - alert: SystemMemory_Critical
-        expr: system_memory_percent > 90
-        for: 2m
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 70
+        for: 20s
         labels:
           severity: critical
           category: memory
         annotations:
-          summary: "Critical: Memory > 90%"
-          description: "Memory at {{ $value }}%. Risk of OOM."
+          summary: "Critical: Memory > 70%"
+          description: "Memory={{ $value }}% on 16GB system. Near limit."
 
       - alert: SystemMemory_Warning
-        expr: system_memory_percent > 78
-        for: 5m
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 55
+        for: 30s
         labels:
           severity: warning
           category: memory
         annotations:
-          summary: "Warning: Memory > 78%"
-          description: "Memory at {{ $value }}%."
+          summary: "Warning: Memory > 55%"
+          description: "Memory={{ $value }}%."
+
+      # per-request memory (GradCAM + inference on CPU can spike)
+      - alert: RequestMemory_Critical
+        expr: histogram_quantile(0.95, rate(request_memory_usage_mb_bucket[5m])) > 1000
+        for: 20s
+        labels:
+          severity: critical
+          category: memory
+        annotations:
+          summary: "Critical: p95 request memory > 1000MB"
+          description: "Requests consuming {{ $value | humanize }}MB each."
+
+      - alert: RequestMemory_Warning
+        expr: histogram_quantile(0.95, rate(request_memory_usage_mb_bucket[5m])) > 500
+        for: 30s
+        labels:
+          severity: warning
+          category: memory
+        annotations:
+          summary: "Warning: p95 request memory > 500MB"
+          description: "Requests consuming {{ $value | humanize }}MB each."
 
   - name: cpu_alerts
     rules:
 
+      # Intel i5 11th gen — concurrent inference saturates CPU quickly
       - alert: SystemCPU_Critical
-        expr: system_cpu_percent > 90
-        for: 3m
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m]))) > 70
+        for: 20s
         labels:
           severity: critical
           category: cpu
         annotations:
-          summary: "Critical: CPU > 90%"
-          description: "CPU at {{ $value }}% for 3+ minutes."
+          summary: "Critical: CPU > 70%"
+          description: "CPU={{ $value }}% sustained. i5 under heavy inference load."
 
       - alert: SystemCPU_Warning
-        expr: system_cpu_percent > 75
-        for: 5m
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[2m]))) > 50
+        for: 20s
         labels:
           severity: warning
           category: cpu
         annotations:
-          summary: "Warning: CPU > 75%"
-          description: "CPU at {{ $value }}%."
+          summary: "Warning: CPU > 50%"
+          description: "CPU={{ $value }}%."
 
   - name: api_alerts
     rules:
 
       - alert: APIDown
         expr: up{job="fastapi_backend"} == 0
-        for: 1m
+        for: 45s
         labels:
           severity: critical
           category: api
         annotations:
-          summary: "Critical: FastAPI backend down"
-          description: "Prometheus cannot reach /metrics on backend."
+          summary: "Critical: FastAPI backend unreachable"
+          description: "Prometheus cannot scrape /metrics."
 
       - alert: HighActiveRequests
-        expr: sum(active_requests) > 10
-        for: 2m
+        expr: sum(rate(api_requests_total{endpoint="/predict",method="POST",status_code="200"}[1m])) > 0.2
+        for: 30s
         labels:
           severity: warning
           category: api
         annotations:
-          summary: "Warning: > 10 concurrent requests"
-          description: "{{ $value }} concurrent requests active."
+          summary: "Warning: high prediction request volume"
+          description: "{{ $value }} active. CPU-only inference queues up."
 
       - alert: NegativeFeedbackSpike
         expr: |
-          (rate(feedback_total{vote="thumbs_down"}[15m]) /
-           (rate(feedback_total{vote="thumbs_up"}[15m]) + 0.001)) > 2
-        for: 10m
+          (rate(feedback_total{vote="thumbs_down"}[5m]) /
+           (rate(feedback_total{vote="thumbs_up"}[5m]) + 0.001)) > 1.2
+        for: 1m
         labels:
           severity: warning
           category: api
         annotations:
-          summary: "Warning: Negative feedback 2x positive rate"
-          description: "Users marking predictions as incorrect frequently."
+          summary: "Warning: Negative feedback spike"
+          description: "thumbs_down > 1.2x thumbs_up in last 5m."
+
+      - alert: HighRequestVolume
+        expr: rate(api_requests_total[1m]) > 2
+        for: 30s
+        labels:
+          severity: warning
+          category: api
+        annotations:
+          summary: "Warning: > 2 req/s sustained"
+          description: "{{ $value | humanize }} req/s — may cause latency."
 
   - name: user_abuse_alerts
     rules:
 
       - alert: UserRateLimitBreach
-        expr: increase(user_rate_limit_breach_total[1h]) > 0
-        for: 0m
+        expr: sum by(username) (
+                increase(user_rate_limit_breach_total[5m])
+              ) > 5
+        for: 30s
         labels:
           severity: warning
           category: abuse
         annotations:
-          summary: "Warning: User exceeded request limit"
-          description: "User {{ $labels.username }} exceeded limit in last hour."
-
-      - alert: UserRateLimitBreach_Repeated
-        expr: increase(user_rate_limit_breach_total[1h]) > 3
-        for: 5m
-        labels:
-          severity: critical
-          category: abuse
-        annotations:
-          summary: "Critical: Repeated rate limit breach"
-          description: "User {{ $labels.username }} breached {{ $value }} times."
-
+          summary: "Warning: User rate limit breach"
+     
       - alert: RegistrationSpike
-        expr: increase(users_registered_total[1h]) > 20
-        for: 0m
+        expr: increase(users_registered_total[5m]) > 3
+        for: 1m
         labels:
           severity: warning
           category: abuse
         annotations:
-          summary: "Warning: > 20 registrations in 1 hour"
-          description: "Possible bot signup activity."
+          summary: "Warning: > 5 registrations in 5m"
+          description: "{{ $value }} new users — possible test or bot activity."
 
   - name: mongodb_alerts
     rules:
 
       - alert: MongoDBDown
         expr: mongodb_up == 0
-        for: 1m
+        for: 45s
         labels:
           severity: critical
           category: database
         annotations:
           summary: "Critical: MongoDB unreachable"
-          description: "Data falling back to in-memory. Data loss risk on restart."
+          description: "All DB operations failing. Data loss risk."
 
       - alert: MongoDBDown_Sustained
         expr: mongodb_up == 0
-        for: 5m
+        for: 2m
         labels:
           severity: critical
           category: database
         annotations:
-          summary: "Critical: MongoDB down 5+ minutes"
-          description: "All in-memory data WILL BE LOST on backend restart."
+          summary: "Critical: MongoDB down 2+ minutes"
+          description: "In-memory fallback data WILL BE LOST on restart."

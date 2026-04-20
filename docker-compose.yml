@@ -12,20 +12,24 @@
 #   7. inhibit_rules removed from rules.yml (Prometheus-level config, not rule-level)
 #   8. Shared network declared explicitly
 #   9. Healthchecks on all critical services
+#  10. [FIXED] Airflow SQLite db directory created before migrate
+#  11. [FIXED] Removed pip install in init (caused dependency conflicts)
+#  12. [FIXED] Webserver/scheduler have no depends_on init (self-healing restart)
 #
 # Usage:
 #   docker compose --env-file .env up -d
 #   docker compose --env-file .env up -d backend  (single service)
 #   docker compose logs backend -f
 #   docker compose down          (keep volumes)
-#   docker compose down -v       (delete volumes too — clears MongoDB data)
+#   docker compose down -v       (delete volumes too — clears ALL data)
 #
 # After start:
-#   Frontend    → http://localhost:7500
-#   API docs    → http://localhost:8000/docs
-#   Grafana     → http://localhost:3005  (admin / admin)
-#   Prometheus  → http://localhost:9090
-#   Alertmanager→ http://localhost:9093
+#   Frontend     → http://localhost:7500
+#   API docs     → http://localhost:8000/docs
+#   Grafana      → http://localhost:3005  (admin / admin)
+#   Prometheus   → http://localhost:9090
+#   Alertmanager → http://localhost:9093
+#   Airflow      → http://localhost:8080  (admin / admin)
 
 networks:
   dermai_net:
@@ -36,15 +40,32 @@ volumes:
   prometheus_data:
   grafana_data:
   mongodb_backup:
+  airflow_logs:       # Airflow task logs
+  airflow_pg:         # PostgreSQL data for Airflow (if switching from SQLite)
+
+# ── shared Airflow config (DRY — referenced by all three Airflow services) ────
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.9.2-python3.10
+  env_file: .env
+  environment:
+    AIRFLOW__CORE__EXECUTOR:             LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+    AIRFLOW__CORE__FERNET_KEY:           ${AIRFLOW__CORE__FERNET_KEY:-}
+    AIRFLOW__CORE__LOAD_EXAMPLES:        "false"
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG:   "true"
+    AIRFLOW__LOGGING__BASE_LOG_FOLDER:   /opt/airflow/logs
+    AIRFLOW_PROJECT_ROOT:                /opt/airflow/project
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - airflow_logs:/opt/airflow/logs
+    - ./:/opt/airflow/project:ro
+    - ./data/reports:/opt/airflow/project/data/reports
+  networks:
+    - dermai_net
 
 services:
 
   # ── MongoDB 6.0 ──────────────────────────────────────────────────────────────
-  # mongo:6.0 includes mongosh for healthcheck
-  # Data in named volume — persists across restarts, survives 'docker compose down'
-  # Connect MongoDB Compass from host: mongodb://localhost:27017
-  # To wipe data: docker compose down -v (only do this intentionally)
-
   mongodb:
     image: mongo:6.0.14
     container_name: dermai-mongodb
@@ -54,7 +75,6 @@ services:
     volumes:
       - mongodb_data:/data/db
     environment:
-      # Suppress verbose WiredTiger checkpoint logs via env (no conf file needed)
       MONGO_INITDB_DATABASE: ${MONGO_DB:-skin_disease_detection}
     command: >
       mongod
@@ -63,7 +83,6 @@ services:
     networks:
       - dermai_net
     healthcheck:
-      # mongosh available in mongo:6.0 — pings admin and returns ok:1
       test: >
         mongosh --quiet --eval
         "try { db.adminCommand('ping').ok } catch(e) { 0 }"
@@ -74,8 +93,6 @@ services:
       start_period: 30s
 
   # ── FastAPI Backend ───────────────────────────────────────────────────────────
-  # Waits for MongoDB healthcheck to pass before starting
-  # mongodb.py uses _ensure_connected() — auto-reconnects if MongoDB restarts
   backend:
     build:
       context: .
@@ -84,7 +101,6 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      # these override .env values inside Docker
       MONGO_URI:  "mongodb://mongodb:27017"
       MONGO_DB:   "${MONGO_DB:-skin_disease_detection}"
       DEVICE:     "${DEVICE:-cpu}"
@@ -92,9 +108,8 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ./outputs:/app/outputs:ro    # model weights read-only
-      - ./logs:/app/logs             # log files
-      - ./archived:/app/archived     # gradcam saves
+      - ./outputs:/app/outputs:ro
+      - ./logs:/app/logs
     command: >
       uvicorn src.api.main:app
       --host 0.0.0.0
@@ -103,23 +118,17 @@ services:
       --log-level info
     depends_on:
       mongodb:
-        condition: service_healthy   # waits for mongosh ping to succeed
+        condition: service_healthy
     networks:
       - dermai_net
     healthcheck:
-      test: >
-        python -c
-        "import urllib.request;
-         r = urllib.request.urlopen('http://localhost:8000/health', timeout=5);
-         assert r.status == 200"
+      test: ["CMD", "python", "-c", "import urllib.request; r = urllib.request.urlopen('http://localhost:8000/health', timeout=10); assert r.status == 200"]
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 120s   # model loading on CPU takes ~60-90s
+      start_period: 120s
 
   # ── Frontend ──────────────────────────────────────────────────────────────────
-  # CRITICAL: --api-url must be localhost (browser-accessible), NOT 'backend'
-  # 'backend' is only resolvable inside Docker network, not from the host browser
   frontend:
     build:
       context: .
@@ -150,7 +159,6 @@ services:
     ports:
       - "${ALERTMANAGER_PORT:-9093}:9093"
     volumes:
-      # mounted — edit alertmanager.yml without rebuild
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
     networks:
       - dermai_net
@@ -193,7 +201,6 @@ services:
       - dermai_net
 
   # ── Prometheus v2.51.2 ────────────────────────────────────────────────────────
-  # v3.x changed inhibit_rules schema — stay on v2.51.x
   prometheus:
     image: prom/prometheus:v2.51.2
     container_name: dermai-prometheus
@@ -207,7 +214,6 @@ services:
     ports:
       - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      # both mounted — reload with: curl -X POST http://localhost:9090/-/reload
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
       - prometheus_data:/prometheus
@@ -225,7 +231,6 @@ services:
       retries: 3
 
   # ── Grafana 10.4.3 LTS ────────────────────────────────────────────────────────
-  # v12.x has WebSocket token rotation bug causing 401 errors — stay on 10.4.x
   grafana:
     image: grafana/grafana:10.4.3
     container_name: dermai-grafana
@@ -235,16 +240,13 @@ services:
       GF_SECURITY_ADMIN_PASSWORD:              admin
       GF_SERVER_HTTP_PORT:                     3000
       GF_USERS_ALLOW_SIGN_UP:                  "false"
-      # Disable token rotation that causes 401 WebSocket errors in newer versions
       GF_AUTH_TOKEN_ROTATION_INTERVAL_MINUTES: "0"
       GF_LOG_LEVEL:                            warn
     ports:
       - "${GRAFANA_PORT:-3005}:3000"
     volumes:
       - grafana_data:/var/lib/grafana
-      # provisioning mounted — change datasources/dashboard config without rebuild
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      # dashboard JSON mounted — update panels without rebuild
       - ./monitoring/grafana_dashboard.json:/var/lib/grafana/dashboards/dermai-dashboard.json:ro
     depends_on:
       prometheus:
@@ -258,14 +260,87 @@ services:
       retries: 3
       start_period: 20s
 
-  # ── MongoDB Backup (manual trigger) ──────────────────────────────────────────
-  # Usage: docker compose run --rm mongodb-backup
-  # Saves dump to ./backups/ on host
+  # ── Airflow Init ──────────────────────────────────────────────────────────────
+  # FIX 1: mkdir -p before airflow db migrate — SQLite needs the directory first
+  # FIX 2: No pip install — it broke SQLAlchemy/requests/cryptography versions
+  # This service runs once and exits (restart: "no")
+  airflow-init:
+    <<: *airflow-common
+    container_name: dermai-airflow-init
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs &&
+        airflow db migrate &&
+        airflow users create \
+          --username "${AIRFLOW_ADMIN_USER:-admin}" \
+          --password "${AIRFLOW_ADMIN_PASSWORD:-admin}" \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@dermai.local || true &&
+        echo "=== Airflow init complete ==="
+    restart: "no"
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+  
+  airflow-postgres:
+    image: postgres:15
+    container_name: dermai-airflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_pg:/var/lib/postgresql/data
+    networks:
+      - dermai_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Airflow Webserver ─────────────────────────────────────────────────────────
+  # FIX 3: No depends_on airflow-init — webserver has restart:unless-stopped
+  # so it retries on its own if the DB isn't ready yet (self-healing)
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: dermai-airflow-web
+    restart: unless-stopped
+    command: webserver
+    ports:
+      - "${AIRFLOW_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+
+  # ── Airflow Scheduler ─────────────────────────────────────────────────────────
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: dermai-airflow-scheduler
+    restart: unless-stopped
+    command: scheduler
+    depends_on:
+      airflow-postgres:
+        condition: service_healthy
+
+  # ── MongoDB Backup (manual trigger only) ─────────────────────────────────────
+  # Usage: docker compose --profile backup run --rm mongodb-backup
   mongodb-backup:
     image: mongo:6.0.14
     container_name: dermai-mongodb-backup
     profiles:
-      - backup    # only runs when: docker compose --profile backup run mongodb-backup
+      - backup
     volumes:
       - mongodb_backup:/backup
       - ./backups:/host_backup

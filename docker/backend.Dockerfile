@@ -39,7 +39,7 @@ COPY params.yaml .
 COPY setup.py .
 
 # create runtime directories
-RUN mkdir -p /app/outputs/models /app/archived /app/logs
+RUN mkdir -p /app/outputs/models /app/logs
 
 EXPOSE 8000
 

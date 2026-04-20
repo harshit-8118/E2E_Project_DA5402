@@ -3,6 +3,15 @@
 # Back up MongoDB data without wiping the volume
 # Usage: bash scripts/backup_mongodb.sh
 
+# backup data (safe — doesn't wipe anything)
+# bash scripts/backup_mongodb.sh
+
+# restore from backup
+# bash scripts/restore_mongodb.sh ./backups/dermai_20260418_120000
+
+# reload prometheus config after rule changes (no restart)
+# curl -X POST http://localhost:9090/-/reload
+
 set -e
 mkdir -p ./backups
 
