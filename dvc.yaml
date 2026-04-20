@@ -3,21 +3,21 @@ stages:
     cmd: python -m src.data_proc.prepare
     deps:
       - src/data_proc/prepare.py
-      - data/raw/HAM10000_metadata.csv
-      - data/raw/images/part_1
-      - data/raw/images/part_2
-      - data/raw/test_images
-      - data/raw/ISIC2018_Task3_Test_GroundTruth.csv
+      - ${prepare.metadata_path}
+      - ${prepare.image_dir_part1}
+      - ${prepare.image_dir_part2}
+      - ${prepare.test_images_dir}
+      - ${prepare.test_metadata_path}
     params:
       - prepare
     outs:
-      - data/processed/train.csv
-      - data/processed/val.csv
-      - data/processed/test.csv
+      - ${prepare.processed_dir}/${prepare.processed_train_csv}
+      - ${prepare.processed_dir}/${prepare.processed_val_csv}
+      - ${prepare.processed_dir}/${prepare.processed_test_csv}
     metrics:
-      - data/reports/prepare_summary.json:
+      - ${prepare.prepare_summary_report}:
           cache: false
-      - data/reports/baseline_stats.json:
+      - ${prepare.baseline_stats_report}:
           cache: false
 
   train:
@@ -29,18 +29,18 @@ stages:
       - src/utils/metrics.py
       - src/utils/reproducibility.py  
       - src/utils/logger.py
-      - data/processed/train.csv
-      - data/processed/val.csv
-      - data/reports/baseline_stats.json
+      - ${prepare.processed_dir}/${prepare.processed_train_csv}
+      - ${prepare.processed_dir}/${prepare.processed_val_csv}
+      - ${prepare.baseline_stats_report}
     params:
       - train
       - prepare
     outs:
-      - outputs/models/best_model.pth
+      - ${evaluate.model_path}
     metrics:
-      - outputs/metrics/train_history.json:
+      - ${train.train_history_path}:
           cache: false
-      - outputs/metrics/mlflow_run_id.txt:
+      - ${train.mlflow_runid_path}:
           cache: false
 
   evaluate:
@@ -53,17 +53,17 @@ stages:
       - src/utils/metrics.py               
       - src/utils/reproducibility.py       
       - src/utils/logger.py                
-      - outputs/models/best_model.pth
-      - outputs/metrics/mlflow_run_id.txt  
-      - data/processed/test.csv
+      - ${evaluate.model_path}
+      - ${train.mlflow_runid_path}
+      - ${prepare.processed_dir}/${prepare.processed_test_csv}
     params:
       - train
       - evaluate
     metrics:
-      - outputs/metrics/eval_metrics.json:
+      - ${evaluate.eval_metrics_path}:
           cache: false
     plots:
-      - outputs/plots/confusion_matrix.png
+      - ${evaluate.confusion_mat_path}
     outs:
-      - outputs/plots/gradcam:       
+      - ${evaluate.gradcam_path}:
           cache: false
