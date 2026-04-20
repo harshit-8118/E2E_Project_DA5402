@@ -10,7 +10,6 @@ load_dotenv(
 
 import os
 import json
-import yaml
 import torch
 import torch.nn as nn
 import random
@@ -28,6 +27,7 @@ import argparse
 
 from src.models.model import build_model, load_class_weights
 from src.models.aug_methods import mixup_data, cutmix_data, mixup_cutmix_criterion
+from src.utils.config import ensure_dir, ensure_parent, load_params, resolve_path
 from src.utils.logger import get_logger
 from src.utils.mlflow_utils import setup_mlflow, log_tags, log_params_from_dict, log_per_class_metrics
 from src.utils.metrics import compute_metrics, compute_per_class_f1, CLASS_NAMES
@@ -180,10 +180,7 @@ def parse_arguments(tp):
 
 # main
 def main():
-    # load params
-    with open("params.yaml") as f:
-        p = yaml.safe_load(f)
-
+    p = load_params()
     tp = p["train"]
     pp = p["prepare"]
     ep = p["evaluate"]
@@ -216,8 +213,16 @@ def main():
     # data
     train_tf, val_tf = get_transforms(tp["image_size"])
 
-    train_ds = SkinDataset(os.path.join(pp["processed_dir"], pp["processed_train_csv"]), train_tf, label_to_idx)
-    val_ds   = SkinDataset(os.path.join(pp["processed_dir"], pp["processed_val_csv"]),   val_tf,   label_to_idx)
+    train_ds = SkinDataset(
+        resolve_path(os.path.join(pp["processed_dir"], pp["processed_train_csv"])),
+        train_tf,
+        label_to_idx,
+    )
+    val_ds = SkinDataset(
+        resolve_path(os.path.join(pp["processed_dir"], pp["processed_val_csv"])),
+        val_tf,
+        label_to_idx,
+    )
 
     g = torch.Generator()
     g.manual_seed(tp["random_seed"])
@@ -237,7 +242,7 @@ def main():
         logger.info(f"GPU memory before: {torch.cuda.memory_allocated()/1024**3:.2f} GB")
 
     # weighted loss — handles class imbalance
-    class_weights = load_class_weights(pp["baseline_stats_report"], CLASS_NAMES, device)
+    class_weights = load_class_weights(resolve_path(pp["baseline_stats_report"]), CLASS_NAMES, device)
     criterion     = nn.CrossEntropyLoss(weight=class_weights if tp["use_weighted_loss"] else None, label_smoothing=tp["label_smoothing"])
 
     optimizer = torch.optim.AdamW(model.parameters(),
@@ -248,10 +253,10 @@ def main():
         optimizer, T_max=tp["epochs"]
     ) if tp["scheduler"] == "cosine" else None
 
-    os.makedirs("outputs/models", exist_ok=True)
+    ensure_parent(ep["model_path"])
     early_stop = EarlyStopping(
         patience=tp["early_stopping_patience"],
-        path=ep["model_path"]
+        path=resolve_path(ep["model_path"])
     )
 
     # mlflow run
@@ -361,17 +366,18 @@ def main():
         })
 
         # save and log training history
-        os.makedirs(tp["metrics_dir"], exist_ok=True)
-        history_path = tp["train_history_path"]
-        with open(history_path, "w") as f:
+        ensure_dir(tp["metrics_dir"])
+        history_path = ensure_parent(tp["train_history_path"])
+        with open(history_path, "w", encoding="utf-8") as f:
             json.dump(train_history, f, indent=2)
         mlflow.log_artifact(history_path)
 
         # log best model as artifact
-        mlflow.log_artifact(ep["model_path"])
+        mlflow.log_artifact(resolve_path(ep["model_path"]))
 
         # save run_id for evaluate.py to pick up
-        with open(tp["mlflow_runid_path"], "w") as f:
+        run_id_path = ensure_parent(tp["mlflow_runid_path"])
+        with open(run_id_path, "w", encoding="utf-8") as f:
             f.write(run.info.run_id)
 
         logger.info(f"Training complete | best_val_macro_f1={best_val_f1:.4f} at epoch {best_epoch}")
@@ -379,3 +385,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

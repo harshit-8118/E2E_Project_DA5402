@@ -2,14 +2,10 @@ import os
 import pandas as pd
 from PIL import Image
 from tqdm import tqdm
-import yaml 
+from src.utils.config import ensure_parent, load_params, resolve_path
 
 
-def load_params() -> dict:
-    with open("params.yaml", "r") as f:
-        return yaml.safe_load(f)["prepare"]
-
-pp = load_params()
+pp = load_params("prepare")
 
 def get_image_stats(folder, ext=".jpg"):
     files = [f for f in os.listdir(folder) if f.endswith(ext)]
@@ -97,12 +93,11 @@ def get_metadata_stats(csv_path, label_col='dx'):
 
 # ── paths ──────────────────────────────────────────────────────────────────────
 FOLDERS = {
-    "part_1"      : pp["image_dir_part1"],
-    "part_2"      : pp["image_dir_part2"],
-    "test_images" : pp["test_images_dir"],
-    "segmentations": pp["segment_images_dir"],
+    "part_1"      : resolve_path(pp["image_dir_part1"]),
+    "part_2"      : resolve_path(pp["image_dir_part2"]),
+    "test_images" : resolve_path(pp["test_images_dir"]),
+    "segmentations": resolve_path(pp["segment_images_dir"]),
 }
-os.makedirs("data/reports", exist_ok=True)
 
 
 # ── 1. image stats per folder ──────────────────────────────────────────────────
@@ -118,12 +113,12 @@ for name, path in FOLDERS.items():
     img_rows.append(stats)
 
 df_img = pd.DataFrame(img_rows).set_index("folder")
-df_img.to_csv(pp["image_stats"])
+df_img.to_csv(ensure_parent(pp["image_stats"]))
 
 
 # ── 2. metadata stats ──────────────────────────────────────────────────────────
-df_train, train_stats = get_metadata_stats(pp["metadata_path"], label_col='dx')
-df_test,  test_stats  = get_metadata_stats(pp["test_metadata_path"], label_col=None)
+df_train, train_stats = get_metadata_stats(resolve_path(pp["metadata_path"]), label_col='dx')
+df_test,  test_stats  = get_metadata_stats(resolve_path(pp["test_metadata_path"]), label_col=None)
 
 
 # ── 3. detect missing test images dynamically ──────────────────────────────────
@@ -154,12 +149,11 @@ file_check = pd.DataFrame([
     {"check": "Test metadata clean",     "count": len(df_test_clean),                  "status": "OK"},
     {"check": "Known missing test imgs", "count": len(KNOWN_MISSING),                  "status": f"{list(KNOWN_MISSING)}"},
 ])
-file_check.to_csv(pp["file_check_summary"], index=False)
-
+file_check.to_csv(ensure_parent(pp["file_check_summary"]), index=False)
 
 # ── 5. class distribution ──────────────────────────────────────────────────────
 df_train['dx'].value_counts().rename_axis('class').reset_index(name='count') \
-    .to_csv(pp["class_distribution"], index=False)
+    .to_csv(ensure_parent(pp["class_distribution"]), index=False)
 
 
 # ── 6. flatten all stats into master summary ───────────────────────────────────
@@ -181,11 +175,10 @@ for _, row in file_check.iterrows():
         "metric": row["check"], "value": f"{row['count']} | {row['status']}"
     })
 
-pd.DataFrame(summary).to_csv(pp["raw_data_summary"], index=False)
+pd.DataFrame(summary).to_csv(ensure_parent(pp["raw_data_summary"]), index=False)
 
-
-print("\n=== Reports saved to data/reports/ ===")
-print(f"  {pp["raw_data_summary"]}     — master")
-print(f"  {pp["image_stats"]}          — dimensions + file sizes per folder")
-print(f"  {pp["class_distribution"]}   — per class counts")
-print(f"  {pp["file_check_summary"]}   — integrity check")
+print("\n=== Reports saved to configured reports paths ===")
+print(f"  {pp['raw_data_summary']}     - master")
+print(f"  {pp['image_stats']}          - dimensions + file sizes per folder")
+print(f"  {pp['class_distribution']}   - per class counts")
+print(f"  {pp['file_check_summary']}   - integrity check")

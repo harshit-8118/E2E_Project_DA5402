@@ -4,18 +4,16 @@
 import os
 import json
 import argparse
-import yaml
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from src.utils.config import ensure_parent, ensure_dir, load_params, resolve_path
 from src.utils.logger import get_logger
 
 logger = get_logger("prepare")
 
-
-def load_params() -> dict:
-    with open("params.yaml", "r") as f:
-        return yaml.safe_load(f)["prepare"]
-
+def resolve_image_path(image_id: str, part1_dir: str, part2_dir: str) -> str | None:
+    for folder in [part1_dir, part2_dir]:
+        path = os.path.join(folder, image_id + ".jpg")
 
 def resolve_image_path(image_id: str, part1_dir: str, part2_dir: str) -> str | None:
     for folder in [part1_dir, part2_dir]:
@@ -78,7 +76,7 @@ def parse_arguments(p):
     return parser.parse_args()
 
 def main():
-    params = load_params()
+    params = load_params("prepare")
     logger.info("Starting prepare stage")
 
     args = parse_arguments(params)
@@ -86,13 +84,17 @@ def main():
     if args.random_seed is not None: params["random_seed"] = args.random_seed
 
     # ── load train metadata ────────────────────────────────────────────────────
-    df = pd.read_csv(params["metadata_path"])
+    df = pd.read_csv(resolve_path(params["metadata_path"]))
     df = df.rename(columns={"dx": "label"})
     logger.info(f"Loaded train metadata: {len(df)} rows, {df['lesion_id'].nunique()} unique lesions")
 
     # ── resolve image paths ────────────────────────────────────────────────────
     df["image_path"] = df["image_id"].apply(
-        lambda x: resolve_image_path(x, params["image_dir_part1"], params["image_dir_part2"])
+        lambda x: resolve_image_path(
+            x,
+            resolve_path(params["image_dir_part1"]),
+            resolve_path(params["image_dir_part2"]),
+        )
     )
 
     unresolved = df["image_path"].isnull().sum()
@@ -106,25 +108,27 @@ def main():
     verify_no_leakage(train_df, val_df)
     logger.info(f"Train: {len(train_df)} images | Val: {len(val_df)} images")
 
-    # ── load test set as-is (ISIC 2018 holdout) ───────────────────────────────
     # ── load test set as-is ────────────────────────────────────────────────────
-    df_test = pd.read_csv(params["test_metadata_path"])
+    df_test = pd.read_csv(resolve_path(params["test_metadata_path"]))
 
     # drop images missing from disk
+    test_images_dir = resolve_path(params["test_images_dir"])
     test_imgs_on_disk = set(
         f.replace(".jpg", "")
-        for f in os.listdir(params["test_images_dir"])
+        for f in os.listdir(test_images_dir)
         if f.endswith(".jpg")
     )
+    
     known_missing = set(df_test["image_id"]) - test_imgs_on_disk
     if known_missing:
         logger.warning(f"Dropping {len(known_missing)} test images not found on disk: {known_missing}")
         df_test = df_test[~df_test["image_id"].isin(known_missing)]
 
     # dx column already has label strings — same format as train
+    # dx column already has label strings — same format as train
     df_test = df_test.rename(columns={"dx": "label"})
     df_test["image_path"] = df_test["image_id"].apply(
-        lambda x: os.path.join(params["test_images_dir"], x + ".jpg")
+        lambda x: os.path.join(test_images_dir, x + ".jpg")
     )
 
     logger.info(f"Test: {len(df_test)} images | Classes: {df_test['label'].unique()}")
@@ -136,11 +140,14 @@ def main():
     test_df  = df_test[cols].reset_index(drop=True)
 
     # ── save splits ────────────────────────────────────────────────────────────
-    os.makedirs(params["processed_dir"], exist_ok=True)
-    train_df.to_csv(os.path.join(params["processed_dir"], params["processed_train_csv"]), index=False)
-    val_df.to_csv(os.path.join(params["processed_dir"], params["processed_val_csv"]),     index=False)
-    test_df.to_csv(os.path.join(params["processed_dir"], params["processed_test_csv"]),   index=False)
-    logger.info("Saved splits to data/processed/")
+    processed_dir = ensure_dir(params["processed_dir"])
+    train_path = os.path.join(processed_dir, params["processed_train_csv"])
+    val_path = os.path.join(processed_dir, params["processed_val_csv"])
+    test_path = os.path.join(processed_dir, params["processed_test_csv"])
+    train_df.to_csv(train_path, index=False)
+    val_df.to_csv(val_path, index=False)
+    test_df.to_csv(test_path, index=False)
+    logger.info(f"Saved splits to {processed_dir}")
 
     # ── prepare summary — tracked as DVC metric ────────────────────────────────
     train_counts = class_counts(train_df)
@@ -155,8 +162,8 @@ def main():
         "unique_val_lesions"  : val_df["lesion_id"].nunique(),
     }
 
-    os.makedirs(params["reports_dir"], exist_ok=True)
-    with open(params["prepare_summary_report"], "w") as f:
+    prepare_summary_path = ensure_parent(params["prepare_summary_report"])
+    with open(prepare_summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
     logger.info(f"Train dist : {train_counts}")
 
@@ -167,11 +174,12 @@ def main():
         "class_weights" : compute_class_weights(train_counts),
     }
 
-    baseline_stats_path = params["baseline_stats_report"]
-    with open(baseline_stats_path, "w") as f:
+    baseline_stats_path = ensure_parent(params["baseline_stats_report"])
+    with open(baseline_stats_path, "w", encoding="utf-8") as f:
         json.dump(baseline, f, indent=2)
     logger.info(f"Saved {baseline_stats_path}")
 
 
 if __name__ == "__main__":
     main()
+    

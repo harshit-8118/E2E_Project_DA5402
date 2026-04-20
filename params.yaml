@@ -20,7 +20,7 @@ prepare:
   image_stats: data/reports/image_stats.csv
 
 train:
-  device: cuda # cpu | cuda for training
+  device: cpu # cpu | cuda for training
   pretrained: true
   epochs: 50
   model_name: efficientnet_b3 # convnext_small, resnet_50, efficientnet_b3
@@ -30,7 +30,7 @@ train:
   learning_rate: 0.0001
   weight_decay: 0.0
   use_weighted_loss: true
-  batch_size: 64
+  batch_size: 16
   num_workers: 4
   image_size: 336
   random_seed: 42
@@ -50,3 +50,12 @@ evaluate:
   eval_metrics_path: outputs/metrics/eval_metrics.json
   gradcam_path: outputs/plots/gradcam
   classification_report_path: outputs/metrics/classification_report.txt
+
+airflow:
+  schedule: "0 2 * * *"
+  drift_threshold: 0.05
+  reports_dir: data/reports
+  baseline_stats_report: data/reports/baseline_stats.json
+  drift_report: data/reports/drift_report.json
+  ingestion_summary_report: data/reports/ingestion_summary.json
+  retraining_request_report: data/reports/retraining_request.json

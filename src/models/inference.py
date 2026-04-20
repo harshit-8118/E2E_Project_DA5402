@@ -8,7 +8,6 @@ load_dotenv(
 
 import os
 import json
-import yaml
 import torch
 import mlflow
 import argparse
@@ -26,6 +25,7 @@ from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 
 from src.models.model import build_model
 from src.models.train import SkinDataset, get_transforms
+from src.utils.config import ensure_dir, ensure_parent, load_params, resolve_path
 from src.utils.logger import get_logger
 from src.utils.mlflow_utils import setup_mlflow, log_tags, log_per_class_metrics
 from src.utils.metrics import (
@@ -138,9 +138,7 @@ def parse_arguments(tp, ep):
 
 
 def main():
-    with open("params.yaml") as f:
-        p = yaml.safe_load(f)
-
+    p = load_params()
     tp = p["train"]
     ep = p["evaluate"]
     pp = p["prepare"]
@@ -171,7 +169,7 @@ def main():
 
     # ── load best model ────────────────────────────────────────────────────────
     model = build_model(tp["model_name"], tp["num_classes"], pretrained=False)
-    model.load_state_dict(torch.load(ep["model_path"], map_location=device, weights_only=True))
+    model.load_state_dict(torch.load(resolve_path(ep["model_path"]), map_location=device, weights_only=True))
     model = model.to(device)
 
     if torch.cuda.is_available():
@@ -186,7 +184,7 @@ def main():
     # ── test dataloader ────────────────────────────────────────────────────────
     _, val_tf = get_transforms(tp["image_size"])
 
-    test_ds   = SkinDataset(os.path.join(pp["processed_dir"], pp["processed_test_csv"]), val_tf, label_to_idx)
+    test_ds = SkinDataset(resolve_path(os.path.join(pp["processed_dir"], pp["processed_test_csv"])), val_tf, label_to_idx)
     test_loader = DataLoader(test_ds, batch_size=tp["batch_size"],
                              shuffle=False, num_workers=tp["num_workers"])
 
@@ -216,30 +214,32 @@ def main():
     logger.info(f"Test macro F1: {overall['macro_f1']}")
 
     # ── save metrics json — used by Prometheus later ───────────────────────────
-    os.makedirs(tp["metrics_dir"], exist_ok=True)
+    ensure_dir(tp["metrics_dir"])
     eval_metrics = {
         **overall,
         "per_class_f1"        : per_class_f1,
         "per_class_mistake_pct": mistake_pct,
     }
-    with open(ep["eval_metrics_path"], "w") as f:
+    eval_metrics_path = ensure_parent(ep["eval_metrics_path"])
+    with open(eval_metrics_path, "w", encoding="utf-8") as f:
         json.dump(eval_metrics, f, indent=2)
 
     # ── confusion matrix plot ──────────────────────────────────────────────────
-    os.makedirs(ep["plots_path"], exist_ok=True)
-    plot_confusion_matrix(cm, CLASS_NAMES, ep["confusion_mat_path"])
+    ensure_dir(ep["plots_path"])
+    confusion_path = ensure_parent(ep["confusion_mat_path"])
+    plot_confusion_matrix(cm, CLASS_NAMES, confusion_path)
 
     # ── gradcam samples ────────────────────────────────────────────────────────
     generate_gradcam_samples(
         model, test_ds, label_to_idx, device,
-        save_dir=ep["gradcam_path"], tp=tp
+        save_dir=ensure_dir(ep["gradcam_path"]), tp=tp
     )
 
     # ── mlflow logging ─────────────────────────────────────────────────────────
 
     env_run_id  = os.environ.get("MLFLOW_RUN_ID", None)
     file_run_id = None
-    run_id_path = tp["mlflow_runid_path"]
+    run_id_path = resolve_path(tp["mlflow_runid_path"])
     if os.path.exists(run_id_path):
         file_run_id = open(run_id_path).read().strip()
 
@@ -277,13 +277,13 @@ def main():
         log_per_class_metrics(mistake_pct, prefix="test_mistake_pct")
 
         # artifacts
-        mlflow.log_artifact(ep["confusion_mat_path"])
-        mlflow.log_artifact(ep["eval_metrics_path"])
-        mlflow.log_artifacts(ep["gradcam_path"], artifact_path="gradcam")
+        mlflow.log_artifact(resolve_path(ep["confusion_mat_path"]))
+        mlflow.log_artifact(resolve_path(ep["eval_metrics_path"]))
+        mlflow.log_artifacts(resolve_path(ep["gradcam_path"]), artifact_path="gradcam")
 
         # log classification report as text artifact
-        report_path = ep["classification_report_path"]
-        with open(report_path, "w") as f:
+        report_path = ensure_parent(ep["classification_report_path"])
+        with open(report_path, "w", encoding="utf-8") as f:
             f.write(report)
         mlflow.log_artifact(report_path)
 
@@ -328,3 +328,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    

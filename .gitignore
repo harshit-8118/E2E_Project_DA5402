@@ -8,6 +8,8 @@ __pycache__/
 /archived
 /guidelines
 tmp*
+test/*
+*.zip
 # Distribution / packaging
 .Python
 build/
