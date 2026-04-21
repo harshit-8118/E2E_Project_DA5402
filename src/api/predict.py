@@ -12,8 +12,11 @@ import io
 import os
 import time
 import uuid
+import asyncio
+import threading
 import httpx
 import base64
+from functools import partial
 from typing import Optional
 from datetime import datetime
 
@@ -78,6 +81,13 @@ DISEASE_META = {
 # app_state reference — set from main.py on startup
 _app_state = {}
 
+# ── PyTorch thread lock ────────────────────────────────────────────────────────
+# torch.no_grad() and GradCAM are CPU-bound and block the async event loop.
+# We offload them to a thread pool via run_in_executor.
+# This lock serializes the actual torch calls (not thread-safe on same model)
+# while allowing all surrounding work (file I/O, MongoDB, metrics) to overlap.
+_torch_lock = threading.Lock()
+
 
 def set_app_state(state: dict):
     global _app_state
@@ -122,10 +132,11 @@ async def call_mlflow_server(tensor: torch.Tensor) -> np.ndarray:
 
 def run_gradcam(model, tensor, class_idx, np_img) -> str:
     try:
-        model.eval()
-        inner = model.model if hasattr(model, "model") else model
-        cam   = GradCAM(model=inner, target_layers=[get_target_layer(inner)])
-        gray  = cam(input_tensor=tensor, targets=[ClassifierOutputTarget(class_idx)])
+        with _torch_lock:
+            model.eval()
+            inner = model.model if hasattr(model, "model") else model
+            cam   = GradCAM(model=inner, target_layers=[get_target_layer(inner)])
+            gray  = cam(input_tensor=tensor, targets=[ClassifierOutputTarget(class_idx)])
         if np_img.max() > 1.0:
             np_img = np_img.astype(np.float32) / 255.0
         cam_img = show_cam_on_image(np_img, gray[0], use_rgb=True)
@@ -171,14 +182,20 @@ async def predict(
         tensor, np_img = preprocess_image(image_bytes)
         tensor         = tensor.float()
 
-        # inference
+        loop   = asyncio.get_event_loop()
+
+        # inference — offloaded to thread so event loop stays free for new requests
+        # _torch_lock serialises torch calls (PyTorch not thread-safe on same model)
         t_infer = time.time()
         if USE_REMOTE_MODEL:
             probs = await call_mlflow_server(tensor)
             probs = torch.softmax(torch.tensor(probs), dim=-1).squeeze().numpy()
         else:
-            with torch.no_grad():
-                probs = torch.softmax(model(tensor), dim=1).squeeze().cpu().numpy()
+            def _infer():
+                with _torch_lock:
+                    with torch.no_grad():
+                        return torch.softmax(model(tensor), dim=1).squeeze().cpu().numpy()
+            probs = await loop.run_in_executor(None, _infer)
         infer_time = time.time() - t_infer
 
         M.INFERENCE_LATENCY.labels(mode="single").observe(infer_time)
@@ -190,8 +207,10 @@ async def predict(
         meta       = DISEASE_META[pred_class]
         all_scores = {CLASS_NAMES[i]: round(float(probs[i]), 4) for i in range(len(CLASS_NAMES))}
 
-        # gradcam
-        gradcam_b64 = run_gradcam(model, tensor, pred_idx, np_img)
+        # gradcam — also CPU-bound, offload to thread pool
+        gradcam_b64 = await loop.run_in_executor(
+            None, partial(run_gradcam, model, tensor, pred_idx, np_img)
+        )
 
         if gradcam_b64:
             pass
@@ -284,13 +303,19 @@ async def explain(
     try:
         image_bytes    = await file.read()
         tensor, np_img = preprocess_image(image_bytes)
+        loop = asyncio.get_event_loop()
         if class_name and class_name in CLASS_NAMES:
             class_idx = CLASS_NAMES.index(class_name)
         else:
-            with torch.no_grad():
-                probs     = torch.softmax(model(tensor), dim=1).squeeze().cpu().numpy()
+            def _infer_explain():
+                with _torch_lock:
+                    with torch.no_grad():
+                        return torch.softmax(model(tensor), dim=1).squeeze().cpu().numpy()
+            probs     = await loop.run_in_executor(None, _infer_explain)
             class_idx = int(np.argmax(probs))
-        gradcam_b64 = run_gradcam(model, tensor, class_idx, np_img)
+        gradcam_b64 = await loop.run_in_executor(
+            None, partial(run_gradcam, model, tensor, class_idx, np_img)
+        )
         if gradcam_b64 is not None:
             pass
         M.REQUEST_COUNT.labels(endpoint="/explain", method="POST", status_code=200).inc()
