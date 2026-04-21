@@ -31,7 +31,7 @@ scrape_configs:
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
-    scrape_interval: 30s
+    scrape_interval: 15s
 
   - job_name: 'node_exporter'
     static_configs:
@@ -41,9 +41,9 @@ scrape_configs:
   - job_name: 'mongodb_exporter'
     static_configs:
       - targets: ['mongodb-exporter:9216']
-    scrape_interval: 30s
+    scrape_interval: 15s
 
   - job_name: 'alertmanager'
     static_configs:
       - targets: ['alertmanager:9093']
-    scrape_interval: 30s
+    scrape_interval: 15s
