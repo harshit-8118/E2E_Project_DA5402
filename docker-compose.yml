@@ -15,6 +15,7 @@
 #  10. [FIXED] Airflow SQLite db directory created before migrate
 #  11. [FIXED] Removed pip install in init (caused dependency conflicts)
 #  12. [FIXED] Webserver/scheduler have no depends_on init (self-healing restart)
+#  13. Frontend public URLs are injected from env/params, not hardcoded file paths
 #
 # Usage:
 #   docker compose --env-file .env up -d
@@ -135,12 +136,12 @@ services:
       dockerfile: docker/frontend.Dockerfile
     container_name: dermai-frontend
     restart: unless-stopped
+    env_file: .env
+    environment:
+      PUBLIC_API_URL: "${PUBLIC_API_URL:-http://localhost:8000}"
+      USER_MANUAL_URL: "${USER_MANUAL_URL:-}"
     ports:
       - "${FRONTEND_PORT:-7500}:7500"
-    command: >
-      python src/api/serve_frontend.py
-      --port 7500
-      --api-url http://localhost:${API_PORT:-8000}
     depends_on:
       backend:
         condition: service_healthy

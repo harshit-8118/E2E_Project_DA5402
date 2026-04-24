@@ -9,10 +9,12 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-# only stdlib needed — no pip installs required
+RUN pip install --no-cache-dir PyYAML python-dotenv
+
 COPY src/api/serve_frontend.py ./src/api/serve_frontend.py
 COPY src/api/frontend/         ./src/api/frontend/
+COPY params.yaml ./params.yaml
 
 EXPOSE 7500
 
-CMD ["python", "src/api/serve_frontend.py", "--port", "7500", "--api-url", "http://localhost:8000"]
+CMD ["python", "src/api/serve_frontend.py", "--port", "7500"]

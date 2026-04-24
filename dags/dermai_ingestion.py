@@ -36,6 +36,10 @@ DRIFT_REPORT_PATH = resolve_path(AIRFLOW_PARAMS["drift_report"])
 INGESTION_SUMMARY_PATH = resolve_path(AIRFLOW_PARAMS["ingestion_summary_report"])
 RETRAINING_REQUEST_PATH = resolve_path(AIRFLOW_PARAMS["retraining_request_report"])
 DRIFT_THRESHOLD = float(AIRFLOW_PARAMS["drift_threshold"])
+DRIFT_TOTAL_PSI_THRESHOLD = float(AIRFLOW_PARAMS.get("drift_total_psi_threshold", 0.1))
+DRIFT_JS_THRESHOLD = float(AIRFLOW_PARAMS.get("drift_js_divergence_threshold", 0.02))
+DRIFT_TV_THRESHOLD = float(AIRFLOW_PARAMS.get("drift_total_variation_threshold", 0.12))
+DRIFT_SAMPLE_RATIO_THRESHOLD = float(AIRFLOW_PARAMS.get("drift_sample_ratio_threshold", 0.2))
 
 DEFAULT_ARGS = {
     "owner": "dermai",
@@ -104,8 +108,16 @@ def task_compute_drift(**ctx):
     n_baseline = sum(baseline_dist.values())
     n_current = sum(current_dist.values())
 
+    baseline_classes = sorted(baseline_dist.keys())
+    current_classes = sorted(current_dist.keys())
+    missing_classes = sorted(set(baseline_classes) - set(current_classes))
+    unseen_classes = sorted(set(current_classes) - set(baseline_classes))
+
     psi_scores = {}
     drift_flags = {}
+    relative_shift = {}
+    baseline_probs = []
+    current_probs = []
     for cls in baseline_dist:
         b_pct = baseline_dist.get(cls, 0) / max(n_baseline, 1)
         c_pct = current_dist.get(cls, 0) / max(n_current, 1)
@@ -113,36 +125,84 @@ def task_compute_drift(**ctx):
         c_pct = max(c_pct, 1e-6)
         psi = (c_pct - b_pct) * np.log(c_pct / b_pct)
         psi_scores[cls] = round(float(psi), 5)
-        drift_flags[cls] = abs(c_pct - b_pct) / b_pct > DRIFT_THRESHOLD
+        rel_change = abs(c_pct - b_pct) / b_pct
+        relative_shift[cls] = round(float(rel_change), 5)
+        drift_flags[cls] = rel_change > DRIFT_THRESHOLD
+        baseline_probs.append(b_pct)
+        current_probs.append(c_pct)
 
-    total_psi = sum(abs(v) for v in psi_scores.values())
-    any_drift = any(drift_flags.values()) or total_psi > 0.1
+    baseline_arr = np.array(baseline_probs, dtype=float)
+    current_arr = np.array(current_probs, dtype=float)
+    mix_arr = 0.5 * (baseline_arr + current_arr)
 
-    age_drift_pct = 0.0
-    if "age_mean" in baseline:
-        curr_age = df["age"].dropna().mean()
-        base_age = baseline["age_mean"]
-        age_drift_pct = abs(curr_age - base_age) / max(base_age, 1)
-        if age_drift_pct > DRIFT_THRESHOLD:
-            any_drift = True
+    total_psi = float(sum(abs(v) for v in psi_scores.values()))
+    total_variation = float(0.5 * np.sum(np.abs(current_arr - baseline_arr)))
+    js_divergence = float(
+        0.5 * np.sum(baseline_arr * np.log(baseline_arr / mix_arr))
+        + 0.5 * np.sum(current_arr * np.log(current_arr / mix_arr))
+    )
+
+    sample_ratio_change = abs(n_current - n_baseline) / max(n_baseline, 1)
+
+    any_drift = any(
+        [
+            any(drift_flags.values()),
+            total_psi > DRIFT_TOTAL_PSI_THRESHOLD,
+            js_divergence > DRIFT_JS_THRESHOLD,
+            total_variation > DRIFT_TV_THRESHOLD,
+            sample_ratio_change > DRIFT_SAMPLE_RATIO_THRESHOLD,
+            bool(missing_classes),
+            bool(unseen_classes),
+        ]
+    )
+
+    triggers = {
+        "per_class_relative_shift": {cls: flag for cls, flag in drift_flags.items() if flag},
+        "psi_threshold_breached": total_psi > DRIFT_TOTAL_PSI_THRESHOLD,
+        "js_divergence_threshold_breached": js_divergence > DRIFT_JS_THRESHOLD,
+        "total_variation_threshold_breached": total_variation > DRIFT_TV_THRESHOLD,
+        "sample_ratio_threshold_breached": sample_ratio_change > DRIFT_SAMPLE_RATIO_THRESHOLD,
+        "missing_classes": missing_classes,
+        "unseen_classes": unseen_classes,
+    }
 
     report = {
         "drift_detected": any_drift,
         "total_psi": round(total_psi, 5),
+        "jensen_shannon_divergence": round(js_divergence, 5),
+        "total_variation_distance": round(total_variation, 5),
         "psi_per_class": psi_scores,
+        "relative_shift_per_class": relative_shift,
         "class_drift_flags": drift_flags,
-        "age_drift_pct": round(age_drift_pct, 4),
+        "missing_classes": missing_classes,
+        "unseen_classes": unseen_classes,
         "current_dist": {k: int(v) for k, v in current_dist.items()},
         "baseline_dist": baseline_dist,
         "n_current": int(n_current),
         "n_baseline": int(n_baseline),
+        "sample_ratio_change": round(sample_ratio_change, 5),
+        "thresholds": {
+            "per_class_relative_shift": DRIFT_THRESHOLD,
+            "total_psi": DRIFT_TOTAL_PSI_THRESHOLD,
+            "jensen_shannon_divergence": DRIFT_JS_THRESHOLD,
+            "total_variation_distance": DRIFT_TV_THRESHOLD,
+            "sample_ratio_change": DRIFT_SAMPLE_RATIO_THRESHOLD,
+        },
+        "triggers": triggers,
         "timestamp": datetime.utcnow().isoformat(),
     }
 
     with open(ensure_parent(DRIFT_REPORT_PATH), "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
 
-    logger.info("Drift check complete: detected=%s total_psi=%.4f", any_drift, total_psi)
+    logger.info(
+        "Drift check complete: detected=%s total_psi=%.4f js=%.4f tv=%.4f sample_ratio=%.4f",
+        any_drift,
+        total_psi,
+        js_divergence,
+        total_variation,
+        sample_ratio_change,
+    )
     ctx["ti"].xcom_push(key="drift_detected", value=any_drift)
     ctx["ti"].xcom_push(key="drift_report", value=report)
     return report
@@ -242,7 +302,11 @@ DermAI data drift detected.
 Run ID: {ctx['run_id']}
 Execution date: {ctx['ds']}
 Total PSI: {drift.get('total_psi')}
-Age drift pct: {drift.get('age_drift_pct')}
+Jensen-Shannon divergence: {drift.get('jensen_shannon_divergence')}
+Total variation distance: {drift.get('total_variation_distance')}
+Sample ratio change: {drift.get('sample_ratio_change')}
+Missing classes: {drift.get('missing_classes')}
+Unseen classes: {drift.get('unseen_classes')}
 
 Airflow saved the request at:
 {RETRAINING_REQUEST_PATH}

@@ -54,8 +54,15 @@ evaluate:
 airflow:
   schedule: "0 2 * * *"
   drift_threshold: 0.05
+  drift_total_psi_threshold: 0.1
+  drift_js_divergence_threshold: 0.02
+  drift_total_variation_threshold: 0.12
+  drift_sample_ratio_threshold: 0.2
   reports_dir: data/reports
   baseline_stats_report: data/reports/baseline_stats.json
   drift_report: data/reports/drift_report.json
   ingestion_summary_report: data/reports/ingestion_summary.json
   retraining_request_report: data/reports/retraining_request.json
+
+frontend:
+  user_manual_url: https://drive.google.com/file/d/1dT30W2ybdzdxjS5hPRGNaqXKS3sr6Lty/view?usp=sharing"
