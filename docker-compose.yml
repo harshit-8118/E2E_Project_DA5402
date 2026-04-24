@@ -1,22 +1,6 @@
 # docker-compose.yml
 # DermAI Complete Stack — CPU only
 #
-# KEY FIXES:
-#   1. Frontend API URL uses host machine IP, not docker service name
-#      (browser JS runs on host, cannot resolve 'backend' hostname)
-#   2. MongoDB 6.0 (stable LTS, not 7.0 which has WiredTiger verbosity issues)
-#   3. Prometheus v2.51 (not v3.5 which changed inhibit_rules schema)
-#   4. Grafana 10.4 (not 12.x which broke WebSocket auth / token rotation)
-#   5. node-exporter listen address matches prometheus scrape port
-#   6. All monitoring files mounted as volumes (no rebuild needed for config changes)
-#   7. inhibit_rules removed from rules.yml (Prometheus-level config, not rule-level)
-#   8. Shared network declared explicitly
-#   9. Healthchecks on all critical services
-#  10. [FIXED] Airflow SQLite db directory created before migrate
-#  11. [FIXED] Removed pip install in init (caused dependency conflicts)
-#  12. [FIXED] Webserver/scheduler have no depends_on init (self-healing restart)
-#  13. Frontend public URLs are injected from env/params, not hardcoded file paths
-#
 # Usage:
 #   docker compose --env-file .env up -d
 #   docker compose --env-file .env up -d backend  (single service)
@@ -44,7 +28,7 @@ volumes:
   airflow_logs:       # Airflow task logs
   airflow_pg:         # PostgreSQL data for Airflow (if switching from SQLite)
 
-# ── shared Airflow config (DRY — referenced by all three Airflow services) ────
+# shared Airflow config (DRY — referenced by all three Airflow services) 
 x-airflow-common: &airflow-common
   image: apache/airflow:2.9.2-python3.10
   env_file: .env
@@ -66,7 +50,7 @@ x-airflow-common: &airflow-common
 
 services:
 
-  # ── MongoDB 6.0 ──────────────────────────────────────────────────────────────
+  # MongoDB 6.0
   mongodb:
     image: mongo:6.0.14
     container_name: dermai-mongodb
@@ -93,7 +77,7 @@ services:
       retries: 10
       start_period: 30s
 
-  # ── FastAPI Backend ───────────────────────────────────────────────────────────
+  # FastAPI Backend
   backend:
     build:
       context: .
@@ -129,7 +113,7 @@ services:
       retries: 5
       start_period: 120s
 
-  # ── Frontend ──────────────────────────────────────────────────────────────────
+  # Frontend
   frontend:
     build:
       context: .
@@ -148,7 +132,7 @@ services:
     networks:
       - dermai_net
 
-  # ── Alertmanager ─────────────────────────────────────────────────────────────
+  # Alertmanager
   alertmanager:
     image: prom/alertmanager:v0.27.0
     container_name: dermai-alertmanager
@@ -169,7 +153,7 @@ services:
       timeout: 5s
       retries: 3
 
-  # ── Node Exporter ─────────────────────────────────────────────────────────────
+  # Node Exporter
   node-exporter:
     image: prom/node-exporter:v1.8.2
     container_name: dermai-node-exporter
@@ -184,7 +168,7 @@ services:
     networks:
       - dermai_net
 
-  # ── MongoDB Exporter ──────────────────────────────────────────────────────────
+  # MongoDB Exporter
   mongodb-exporter:
     image: percona/mongodb_exporter:0.40.0
     container_name: dermai-mongodb-exporter
@@ -201,7 +185,7 @@ services:
     networks:
       - dermai_net
 
-  # ── Prometheus v2.51.2 ────────────────────────────────────────────────────────
+  # Prometheus v2.51.2 
   prometheus:
     image: prom/prometheus:v2.51.2
     container_name: dermai-prometheus
@@ -231,7 +215,7 @@ services:
       timeout: 5s
       retries: 3
 
-  # ── Grafana 10.4.3 LTS ────────────────────────────────────────────────────────
+  # Grafana 10.4.3 LTS 
   grafana:
     image: grafana/grafana:10.4.3
     container_name: dermai-grafana
@@ -261,10 +245,7 @@ services:
       retries: 3
       start_period: 20s
 
-  # ── Airflow Init ──────────────────────────────────────────────────────────────
-  # FIX 1: mkdir -p before airflow db migrate — SQLite needs the directory first
-  # FIX 2: No pip install — it broke SQLAlchemy/requests/cryptography versions
-  # This service runs once and exits (restart: "no")
+  # Airflow Init
   airflow-init:
     <<: *airflow-common
     container_name: dermai-airflow-init
@@ -305,7 +286,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Airflow Webserver ─────────────────────────────────────────────────────────
+  # Airflow Webserver
   # FIX 3: No depends_on airflow-init — webserver has restart:unless-stopped
   # so it retries on its own if the DB isn't ready yet (self-healing)
   airflow-webserver:
@@ -325,7 +306,7 @@ services:
       airflow-postgres:
         condition: service_healthy
 
-  # ── Airflow Scheduler ─────────────────────────────────────────────────────────
+  # Airflow Scheduler
   airflow-scheduler:
     <<: *airflow-common
     container_name: dermai-airflow-scheduler
@@ -335,7 +316,7 @@ services:
       airflow-postgres:
         condition: service_healthy
 
-  # ── MongoDB Backup (manual trigger only) ─────────────────────────────────────
+  # MongoDB Backup (manual trigger only)
   # Usage: docker compose --profile backup run --rm mongodb-backup
   mongodb-backup:
     image: mongo:6.0.14

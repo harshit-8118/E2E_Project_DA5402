@@ -54,9 +54,7 @@ app_state = {
     "_stop_bg"  : threading.Event(),   # signal to stop background thread
 }
 
-# ── warmup psutil CPU so first reading is valid ────────────────────────────────
-# psutil.cpu_percent(interval=None) returns 0.0 on first call
-# Call it once at import time to prime the internal timer
+# warmup psutil CPU so first reading is valid
 psutil.cpu_percent(interval=None)
 
 
@@ -125,29 +123,29 @@ def _background_metrics_loop(stop_event: threading.Event):
 
     while not stop_event.is_set():
         try:
-            # ── CPU — interval=None uses time since last call (fast, accurate) ──
+            # CPU — interval=None uses time since last call (fast, accurate)
             cpu = psutil.cpu_percent(interval=None)
             M.CPU_PERCENT.set(cpu)
 
-            # ── Memory ────────────────────────────────────────────────────────
+            # Memory
             vm = psutil.virtual_memory()
             M.MEMORY_PERCENT.set(vm.percent)
             M.MEMORY_USED_GB.set(round(vm.used / 1e9, 3))
 
-            # ── GPU (only if available) ────────────────────────────────────────
+            # GPU (only if available) ─
             if torch.cuda.is_available():
                 M.GPU_ALLOC.set(torch.cuda.memory_allocated() / 1e9)
                 M.GPU_RESERVED.set(torch.cuda.memory_reserved() / 1e9)
 
-            # ── Uptime ────────────────────────────────────────────────────────
+            # Uptime
             if app_state["start_time"]:
                 M.UPTIME.set(time.time() - app_state["start_time"])
 
-            # ── MongoDB status ────────────────────────────────────────────────
+            # MongoDB status 
             db_up = mongo.is_up()
             M.MONGODB_UP.set(1 if db_up else 0)
 
-            # ── User counts (cheap count queries) ─────────────────────────────
+            # User counts (cheap count queries)
             M.USERS_REGISTERED.set(mongo.get_all_users_count())
             M.USERS_VERIFIED.set(mongo.get_verified_users_count())
 
@@ -158,7 +156,7 @@ def _background_metrics_loop(stop_event: threading.Event):
         stop_event.wait(timeout=5.0)
 
 
-# ── lifespan ───────────────────────────────────────────────────────────────────
+# lifespan 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app_state["start_time"] = time.time()
@@ -224,7 +222,7 @@ async def lifespan(app: FastAPI):
     logger.info("Server shut down")
 
 
-# ── app ────────────────────────────────────────────────────────────────────────
+# app 
 app = FastAPI(
     title="Skin Disease Detection API",
     description="AI-powered dermoscopy classification with user accounts and Grad-CAM",
@@ -243,17 +241,14 @@ app.include_router(auth_router)
 app.include_router(predict_router)
 
 
-# ── middleware — request-level metrics only (not system stats) ─────────────────
-# System stats (CPU/memory) are handled by background thread above.
-# Middleware only handles per-request counters that need request context.
+# middleware — request-level metrics only (not system stats)
 @app.middleware("http")
 async def request_metrics_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
 
-# ── system routes ──────────────────────────────────────────────────────────────
-
+# system routes 
 @app.get("/", tags=["System"])
 def root():
     return {

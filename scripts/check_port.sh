@@ -1,12 +1,4 @@
 # run in bash
-# API_PORT=8000          # FastAPI backend
-# FRONTEND_PORT=7500     # frontend HTML server
-# MLFLOW_PORT=5001       # mlflow server (serve.sh)
-# PROMETHEUS_PORT=9090   # prometheus
-# GRAFANA_PORT=3000      # grafana
-# ALERTMANAGER_PORT=9093 # alertmanager
-# NODE_EXPORTER=9182     # node_exporter
-# MONGODB_PORT=27017     # mongodb
 # ./scripts/check_port.sh
 
 PORTS=(7500 8000 27017 5000 9090 9093 3000 9182 8080 3005)

@@ -91,7 +91,7 @@ def get_metadata_stats(csv_path, label_col='dx'):
     return df, stats
 
 
-# ── paths ──────────────────────────────────────────────────────────────────────
+# paths 
 FOLDERS = {
     "part_1"      : resolve_path(pp["image_dir_part1"]),
     "part_2"      : resolve_path(pp["image_dir_part2"]),
@@ -100,7 +100,7 @@ FOLDERS = {
 }
 
 
-# ── 1. image stats per folder ──────────────────────────────────────────────────
+# 1. image stats per folder
 print("\n=== Scanning image folders ===")
 img_rows = []
 for name, path in FOLDERS.items():
@@ -116,12 +116,12 @@ df_img = pd.DataFrame(img_rows).set_index("folder")
 df_img.to_csv(ensure_parent(pp["image_stats"]))
 
 
-# ── 2. metadata stats ──────────────────────────────────────────────────────────
+# 2. metadata stats
 df_train, train_stats = get_metadata_stats(resolve_path(pp["metadata_path"]), label_col='dx')
 df_test,  test_stats  = get_metadata_stats(resolve_path(pp["test_metadata_path"]), label_col=None)
 
 
-# ── 3. detect missing test images dynamically ──────────────────────────────────
+# 3. detect missing test images dynamically
 test_imgs      = set(f.replace(".jpg", "") for f in os.listdir(FOLDERS["test_images"]) if f.endswith(".jpg"))
 test_meta_ids  = set(df_test['image_id'])
 KNOWN_MISSING  = test_meta_ids - test_imgs  # images in CSV but not on disk
@@ -131,7 +131,7 @@ test_stats["rows_after_drop"] = len(df_test_clean)
 test_stats["known_missing"]   = list(KNOWN_MISSING)
 
 
-# ── 4. train file integrity check ─────────────────────────────────────────────
+# 4. train file integrity check
 all_train_imgs = set(
     f.replace(".jpg", "")
     for folder in [FOLDERS["part_1"], FOLDERS["part_2"]]
@@ -151,12 +151,12 @@ file_check = pd.DataFrame([
 ])
 file_check.to_csv(ensure_parent(pp["file_check_summary"]), index=False)
 
-# ── 5. class distribution ──────────────────────────────────────────────────────
+# 5. class distribution
 df_train['dx'].value_counts().rename_axis('class').reset_index(name='count') \
     .to_csv(ensure_parent(pp["class_distribution"]), index=False)
 
 
-# ── 6. flatten all stats into master summary ───────────────────────────────────
+# 6. flatten all stats into master summary
 def flatten(stats, source, category):
     return [{"category": category, "source": source, "metric": k, "value": str(v)}
             for k, v in stats.items()]

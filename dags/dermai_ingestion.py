@@ -27,6 +27,7 @@ PARAMS = load_params()
 PREPARE_PARAMS = PARAMS["prepare"]
 AIRFLOW_PARAMS = PARAMS["airflow"]
 
+# Resolve all project paths through params/config so the DAG stays portable.
 METADATA_PATH = resolve_path(PREPARE_PARAMS["metadata_path"])
 DATA_RAW = os.path.dirname(METADATA_PATH)
 DATA_PROCESSED = resolve_path(PREPARE_PARAMS["processed_dir"])
@@ -113,6 +114,7 @@ def task_compute_drift(**ctx):
     missing_classes = sorted(set(baseline_classes) - set(current_classes))
     unseen_classes = sorted(set(current_classes) - set(baseline_classes))
 
+    # Compare current metadata distribution against baseline training distribution.
     psi_scores = {}
     drift_flags = {}
     relative_shift = {}
@@ -144,6 +146,7 @@ def task_compute_drift(**ctx):
 
     sample_ratio_change = abs(n_current - n_baseline) / max(n_baseline, 1)
 
+    # Raise a drift signal when any configured distribution-shift condition is breached.
     any_drift = any(
         [
             any(drift_flags.values()),
@@ -381,3 +384,4 @@ with DAG(
     [compute_drift, validate_splits] >> save_summary
     save_summary >> branch
     branch >> [notify_drift, no_retraining]
+    

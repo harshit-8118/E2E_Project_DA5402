@@ -1,7 +1,3 @@
-# monitoring/prometheus.yml
-# All targets use Docker service names — works inside dermai_net network
-# node-exporter listens on 9182 (matches compose command)
-
 global:
   scrape_interval:     15s
   evaluation_interval: 15s

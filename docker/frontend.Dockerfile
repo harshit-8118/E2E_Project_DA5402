@@ -9,6 +9,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# install dependencies for serve_frontend.py
 RUN pip install --no-cache-dir PyYAML python-dotenv
 
 COPY src/api/serve_frontend.py ./src/api/serve_frontend.py

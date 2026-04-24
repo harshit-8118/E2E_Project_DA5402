@@ -8,7 +8,7 @@ python_env: python_env.yaml
 
 entry_points:
 
-  # ── data preparation ────────────────────────────────────────────────────────
+  #  data preparation
   prepare:
     parameters:
       val_size:
@@ -19,7 +19,7 @@ entry_points:
         default: 42
     command: "python -m src.data_proc.prepare --val_size {val_size} --random_seed {random_seed}"
 
-  # ── model training ──────────────────────────────────────────────────────────
+  #  model training
   train_and_evaluate:
     parameters:
       model_name:
@@ -89,6 +89,3 @@ entry_points:
       python -m src.models.inference
       --model_path {model_path}
       --acceptance_macro_f1 {acceptance_macro_f1}
-
-  # ── serve API ───────────────────────────────────────────────────────────────
-  # manual serve from CPU machine

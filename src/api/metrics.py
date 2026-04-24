@@ -1,4 +1,3 @@
-# src/api/metrics.py
 # All Prometheus metrics — single source of truth
 # Imported by main.py and predict.py
 
@@ -33,7 +32,7 @@ def _summary(name, doc, labels):
         return REGISTRY._names_to_collectors.get(name)
 
 
-# ── Application level ──────────────────────────────────────────────────────────
+#  Application level 
 
 # every HTTP request — labels allow breakdown by endpoint, method, status
 REQUEST_COUNT = _counter(
@@ -56,8 +55,6 @@ IMAGES_PROCESSED = _counter(
     ["status"]   # success | failed
 )
 
-# FIX: HIGH_RISK_COUNTER had empty labels [] causing inc() to fail silently
-# Use labels=[] and call .inc() with no arguments — this is correct
 HIGH_RISK_COUNTER = _counter(
     "high_risk_predictions_total",
     "Predictions classified as HIGH risk (melanoma)",
@@ -79,7 +76,7 @@ FEEDBACK_COUNTER = _counter(
 )
 
 
-# ── User level ─────────────────────────────────────────────────────────────────
+#  User level ─
 
 # per-user prediction counter — use sum(user_predictions_total) in Prometheus
 USER_PREDICTIONS = _counter(
@@ -107,7 +104,7 @@ USERS_VERIFIED = _gauge(
 )
 
 
-# ── Inference level ────────────────────────────────────────────────────────────
+#  Inference level 
 
 # model inference time — use histogram_quantile(0.95, ...) in Prometheus
 INFERENCE_LATENCY = _histogram(
@@ -157,7 +154,7 @@ INFER_SUMMARY = _summary(
 )
 
 
-# ── System level — updated by background thread every 5s ──────────────────────
+#  System level — updated by background thread every 5s 
 
 MODEL_LOADED = _gauge(
     "model_loaded",
@@ -172,7 +169,6 @@ ACTIVE_REQUESTS = _gauge(
 )
 
 # system CPU — set by background thread, not by middleware
-# FIX: was set in middleware only on requests → missing data between requests
 CPU_PERCENT = _gauge(
     "system_cpu_percent",
     "System CPU utilization percent (updated every 5s)"
@@ -219,7 +215,7 @@ MONGODB_UP = _gauge(
 )
 
 
-# ── User feedback level ────────────────────────────────────────────────────────
+#  User feedback level 
 
 # rolling positive feedback ratio gauge (0.0 to 1.0)
 FEEDBACK_RATE = _gauge(

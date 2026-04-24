@@ -6,7 +6,7 @@ from typing import Optional, List
 from pydantic import BaseModel, EmailStr, Field
 
 
-# ── user ──────────────────────────────────────────────────────────────────────
+#  user
 class UserCreate(BaseModel):
     username : str
     email    : EmailStr
@@ -30,7 +30,7 @@ class UserPublic(BaseModel):
     feedback_count   : int = 0
 
 
-# ── OTP ───────────────────────────────────────────────────────────────────────
+#  OTP
 class OTPRequest(BaseModel):
     email : EmailStr
 
@@ -40,7 +40,7 @@ class OTPVerify(BaseModel):
     otp   : str
 
 
-# ── token ─────────────────────────────────────────────────────────────────────
+#  toke
 class Token(BaseModel):
     access_token : str
     token_type   : str = "bearer"
@@ -49,7 +49,7 @@ class Token(BaseModel):
     email        : str
 
 
-# ── prediction ────────────────────────────────────────────────────────────────
+#  prediction 
 class PredictionRecord(BaseModel):
     prediction_id  : str
     uid            : str
@@ -64,7 +64,7 @@ class PredictionRecord(BaseModel):
     timestamp      : str
 
 
-# ── feedback ──────────────────────────────────────────────────────────────────
+#  feedback 
 class FeedbackRecord(BaseModel):
     prediction_id : str
     uid           : str
@@ -74,7 +74,7 @@ class FeedbackRecord(BaseModel):
     timestamp     : str
 
 
-# ── image ─────────────────────────────────────────────────────────────────────
+#  image
 class ImageRecord(BaseModel):
     image_id      : str
     prediction_id : str

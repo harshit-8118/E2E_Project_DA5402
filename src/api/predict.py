@@ -81,7 +81,7 @@ DISEASE_META = {
 # app_state reference — set from main.py on startup
 _app_state = {}
 
-# ── PyTorch thread lock ────────────────────────────────────────────────────────
+#  PyTorch thread lock 
 # torch.no_grad() and GradCAM are CPU-bound and block the async event loop.
 # We offload them to a thread pool via run_in_executor.
 # This lock serializes the actual torch calls (not thread-safe on same model)
@@ -148,7 +148,7 @@ def run_gradcam(model, tensor, class_idx, np_img) -> str:
         return ""
 
 
-# ── schemas ────────────────────────────────────────────────────────────────────
+# schemas 
 class FeedbackRequest(BaseModel):
     prediction_id: str
     vote         : str
@@ -161,7 +161,7 @@ class FeedbackResponse(BaseModel):
     stored_in     : str
 
 
-# ── routes ─────────────────────────────────────────────────────────────────────
+# routes 
 
 @router.post("/predict")
 async def predict(

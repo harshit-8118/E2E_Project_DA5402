@@ -127,7 +127,7 @@ class MongoDB:
         """Check connectivity — used by Prometheus gauge and /health endpoint."""
         return self._ensure_connected()
 
-    # ── users ──────────────────────────────────────────────────────────────────
+    #  users 
 
     def create_user(self, username: str, email: str, password: str, gender: str) -> dict:
         if not self._ensure_connected():
@@ -218,7 +218,7 @@ class MongoDB:
         try:   return self.db.users.count_documents({"verified": True})
         except: return 0
 
-    # ── OTP ────────────────────────────────────────────────────────────────────
+    #  OTP 
 
     def save_otp(self, email: str, otp: str) -> bool:
         if not self._ensure_connected(): return False
@@ -250,7 +250,7 @@ class MongoDB:
             logger.error(f"verify_otp failed: {e}")
             return False
 
-    # ── rate limiting ──────────────────────────────────────────────────────────
+    #  rate limiting 
 
     def log_request(self, uid: str, endpoint: str) -> int:
         if not self._ensure_connected(): return 0
@@ -269,7 +269,7 @@ class MongoDB:
             logger.error(f"log_request failed: {e}")
             return 0
 
-    # ── predictions ────────────────────────────────────────────────────────────
+    #  predictions 
 
     def save_prediction(
         self, prediction_id: str, uid: str, username: str,
@@ -323,7 +323,7 @@ class MongoDB:
             return {"total_predictions": total, "by_class": by_class, "high_risk_total": high}
         except: return {}
 
-    # ── images ─────────────────────────────────────────────────────────────────
+    #  images 
 
     def save_image(
         self, uid: str, username: str, prediction_id: str,
@@ -349,7 +349,7 @@ class MongoDB:
             logger.error(f"save_image failed: {e}")
             return None
 
-    # ── feedback ───────────────────────────────────────────────────────────────
+    #  feedback 
 
     def save_feedback(
         self, prediction_id: str, uid: str, username: str,

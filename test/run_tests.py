@@ -134,6 +134,7 @@ def _get(url: str, timeout: int = 20):
 def query_prom(query: str) -> float | None:
     assert SETTINGS is not None
     try:
+        # Using the /api/v1/query endpoint to get the current value of a metric or expression
         resp = requests.get(
             f"{SETTINGS.prom}/api/v1/query",
             params={"query": query},
@@ -215,7 +216,7 @@ def register_and_verify(suffix: str = "") -> tuple[str, str, str | None]:
     username = f"tester_{uuid.uuid4().hex[:6]}"
     password = "TestPass123!"
 
-    signup = requests.post(
+    signup = requests.post(                     # signup 
         f"{SETTINGS.base}/auth/signup",
         json={
             "username": username,
@@ -231,7 +232,7 @@ def register_and_verify(suffix: str = "") -> tuple[str, str, str | None]:
     try:
         from pymongo import MongoClient
 
-        client = MongoClient(SETTINGS.mongo_uri, serverSelectionTimeoutMS=3000)
+        client = MongoClient(SETTINGS.mongo_uri, serverSelectionTimeoutMS=3000) # connect to MongoDB to set user as verified
         client[SETTINGS.mongo_db].users.update_one(
             {"email": email},
             {"$set": {"verified": True}},
@@ -240,7 +241,7 @@ def register_and_verify(suffix: str = "") -> tuple[str, str, str | None]:
     except Exception as exc:
         info(f"  {WARN} MongoDB direct access failed: {exc}")
 
-    login = requests.post(
+    login = requests.post(   # login to get token
         f"{SETTINGS.base}/auth/login",
         json={"email": email, "password": password},
         timeout=30,

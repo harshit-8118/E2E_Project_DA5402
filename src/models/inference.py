@@ -167,7 +167,7 @@ def main():
     device       = torch.device(tp["device"] if torch.cuda.is_available() else "cpu")
     label_to_idx = {cls: i for i, cls in enumerate(CLASS_NAMES)}
 
-    # ── load best model ────────────────────────────────────────────────────────
+    #  load best model
     model = build_model(tp["model_name"], tp["num_classes"], pretrained=False)
     model.load_state_dict(torch.load(resolve_path(ep["model_path"]), map_location=device, weights_only=True))
     model = model.to(device)
@@ -181,14 +181,14 @@ def main():
     model.eval()
     logger.info(f"Loaded model from {ep['model_path']}")
 
-    # ── test dataloader ────────────────────────────────────────────────────────
+    #  test dataloader
     _, val_tf = get_transforms(tp["image_size"])
 
     test_ds = SkinDataset(resolve_path(os.path.join(pp["processed_dir"], pp["processed_test_csv"])), val_tf, label_to_idx)
     test_loader = DataLoader(test_ds, batch_size=tp["batch_size"],
                              shuffle=False, num_workers=tp["num_workers"])
 
-    # ── inference ──────────────────────────────────────────────────────────────
+    #  inference
     all_preds, all_labels = [], []
     with torch.no_grad():
         for images, labels in test_loader:
@@ -203,7 +203,7 @@ def main():
     pred_names    = [idx_to_label[p] for p in all_preds]
     true_names    = [idx_to_label[l] for l in all_labels]
 
-    # ── compute all metrics ────────────────────────────────────────────────────
+    #  compute all metrics
     overall       = compute_metrics(true_names, pred_names)
     per_class_f1  = compute_per_class_f1(true_names, pred_names, CLASS_NAMES)
     mistake_pct   = compute_per_class_mistake_pct(true_names, pred_names, CLASS_NAMES)
@@ -213,7 +213,7 @@ def main():
     logger.info(f"\n{report}")
     logger.info(f"Test macro F1: {overall['macro_f1']}")
 
-    # ── save metrics json — used by Prometheus later ───────────────────────────
+    #  save metrics json — used by Prometheus later
     ensure_dir(tp["metrics_dir"])
     eval_metrics = {
         **overall,
@@ -224,18 +224,18 @@ def main():
     with open(eval_metrics_path, "w", encoding="utf-8") as f:
         json.dump(eval_metrics, f, indent=2)
 
-    # ── confusion matrix plot ──────────────────────────────────────────────────
+    #  confusion matrix plot
     ensure_dir(ep["plots_path"])
     confusion_path = ensure_parent(ep["confusion_mat_path"])
     plot_confusion_matrix(cm, CLASS_NAMES, confusion_path)
 
-    # ── gradcam samples ────────────────────────────────────────────────────────
+    #  gradcam samples
     generate_gradcam_samples(
         model, test_ds, label_to_idx, device,
         save_dir=ensure_dir(ep["gradcam_path"]), tp=tp
     )
 
-    # ── mlflow logging ─────────────────────────────────────────────────────────
+    #  mlflow logging
 
     env_run_id  = os.environ.get("MLFLOW_RUN_ID", None)
     file_run_id = None
@@ -256,7 +256,7 @@ def main():
     with mlflow.start_run(run_id=active_run_id):
         log_tags(tp["model_name"], stage="evaluation")
 
-        # ── overall metrics — all of them ──────────────────────────────────────
+        #  overall metrics — all of them
         mlflow.log_metrics({
             "test_accuracy"          : overall["accuracy"],
             "test_macro_f1"          : overall["macro_f1"],

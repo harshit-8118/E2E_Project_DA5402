@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# ── layer 1: requirements (cached unless docker-requirements.txt changes) ──────
+# layer 1: requirements (cached unless docker-requirements.txt changes) 
 COPY docker-requirements.txt .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system --index-strategy unsafe-best-match -r docker-requirements.txt
@@ -28,12 +28,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system "grad-cam==1.5.4"
 
-# ── layer 2: package setup (cached unless setup.py/params.yaml changes) ────────
+# layer 2: package setup (cached unless setup.py/params.yaml changes)
 COPY setup.py params.yaml ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --system -e . --no-deps
 
-# ── layer 3: source code (changes most often — last for cache efficiency) ───────
+# layer 3: source code (changes most often — last for cache efficiency) 
 COPY src/ ./src/
 COPY params.yaml .
 COPY setup.py .

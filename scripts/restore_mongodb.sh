@@ -1,5 +1,4 @@
 #!/bin/bash
-# scripts/restore_mongodb.sh
 # Restore MongoDB from a backup WITHOUT wiping current data
 # Usage: bash scripts/restore_mongodb.sh ./backups/dermai_20260418_120000
 
