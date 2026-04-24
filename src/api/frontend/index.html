@@ -22,6 +22,7 @@
           <div class="status-dot" id="statusDot"></div>
           <span id="statusText">Checking...</span>
         </div>
+        <button class="btn btn-ghost btn-sm" id="profileBtn" type="button">Profile</button>
         <button class="btn btn-ghost btn-sm" id="logoutBtn" type="button">Logout</button>
       </div>
     </header>
@@ -109,6 +110,7 @@
           <button class="btn-feedback" id="thumbUp" type="button">Yes</button>
           <button class="btn-feedback" id="thumbDown" type="button">No</button>
         </div>
+        <textarea id="feedbackComment" class="feedback-comment" rows="3" placeholder="Optional comment: tell us what was correct, unclear, or inaccurate."></textarea>
         <div class="feedback-thanks" id="feedbackThanks">Thank you for your feedback.</div>
       </div>
 
@@ -122,6 +124,56 @@
     DermAI - DA5402 MLOps Project - IIT Madras
     <span>Not a substitute for professional medical diagnosis</span>
   </footer>
+
+  <div class="modal-overlay hidden-block" id="profileModal">
+    <div class="modal-card profile-modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="card-label">Account</div>
+          <h3>Profile & Prediction History</h3>
+        </div>
+        <button class="modal-close" id="profileModalClose" type="button" aria-label="Close profile">x</button>
+      </div>
+
+      <div class="profile-grid">
+        <div class="profile-panel">
+          <div class="profile-stat">
+            <span class="profile-label">Username</span>
+            <strong id="profileUsername">-</strong>
+          </div>
+          <div class="profile-stat">
+            <span class="profile-label">Email</span>
+            <strong id="profileEmail">-</strong>
+          </div>
+          <div class="profile-stat">
+            <span class="profile-label">Gender</span>
+            <strong id="profileGender">-</strong>
+          </div>
+          <div class="profile-stat">
+            <span class="profile-label">Verified</span>
+            <strong id="profileVerified">-</strong>
+          </div>
+          <div class="profile-stat">
+            <span class="profile-label">Predictions</span>
+            <strong id="profilePredictionCount">0</strong>
+          </div>
+          <div class="profile-stat">
+            <span class="profile-label">Feedback</span>
+            <strong id="profileFeedbackCount">0</strong>
+          </div>
+        </div>
+
+        <div class="profile-panel">
+          <div class="profile-history-head">
+            <span class="profile-label">Recent Predictions</span>
+          </div>
+          <div id="predictionHistory" class="history-list">
+            <p class="history-empty">No predictions available yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="config.js"></script>
   <script src="app.js"></script>

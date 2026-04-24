@@ -2,6 +2,9 @@
   const API = (window.DERMAI_CONFIG && window.DERMAI_CONFIG.API_URL
     ? window.DERMAI_CONFIG.API_URL
     : "http://127.0.0.1:8000").replace(/\/$/, "");
+  const USER_MANUAL_URL = window.DERMAI_CONFIG && window.DERMAI_CONFIG.USER_MANUAL_URL
+    ? window.DERMAI_CONFIG.USER_MANUAL_URL
+    : "";
   const storage = {
     token: "dermai_token",
     username: "dermai_username",
@@ -27,6 +30,30 @@
   const signupBtn = document.getElementById("signupBtn");
   const verifyBtn = document.getElementById("verifyBtn");
   const resendBtn = document.getElementById("resendBtn");
+  const manualDownloadLink = document.getElementById("manualDownloadLink");
+  const legalModal = document.getElementById("legalModal");
+  const legalModalTitle = document.getElementById("legalModalTitle");
+  const legalTermsSection = document.getElementById("legalTermsSection");
+  const legalManualSection = document.getElementById("legalManualSection");
+  const legalTabs = document.querySelectorAll(".modal-tab");
+
+  function switchLegalTab(tab) {
+    legalTabs.forEach((button) => {
+      button.classList.toggle("active", button.dataset.legalTab === tab);
+    });
+    legalTermsSection.style.display = tab === "terms" ? "block" : "none";
+    legalManualSection.style.display = tab === "manual" ? "block" : "none";
+    legalModalTitle.textContent = tab === "manual" ? "User Manual" : "Terms & Conditions";
+  }
+
+  function openLegalModal(tab) {
+    switchLegalTab(tab);
+    legalModal.style.display = "flex";
+  }
+
+  function closeLegalModal() {
+    legalModal.style.display = "none";
+  }
 
   function switchTab(tab) {
     tabs.forEach((button) => {
@@ -242,6 +269,28 @@
     step2.style.display = "none";
     clearMsg();
   });
+  document.getElementById("termsLink").addEventListener("click", function () {
+    openLegalModal("terms");
+  });
+  document.getElementById("manualLink").addEventListener("click", function () {
+    openLegalModal("manual");
+  });
+  document.getElementById("legalModalClose").addEventListener("click", closeLegalModal);
+  legalModal.addEventListener("click", function (event) {
+    if (event.target === legalModal) {
+      closeLegalModal();
+    }
+  });
+  legalTabs.forEach((button) => {
+    button.addEventListener("click", function () {
+      switchLegalTab(button.dataset.legalTab);
+    });
+  });
+  if (USER_MANUAL_URL) {
+    manualDownloadLink.href = USER_MANUAL_URL;
+  } else {
+    manualDownloadLink.style.display = "none";
+  }
 
   switchTab("login");
 }());

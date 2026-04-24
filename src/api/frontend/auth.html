@@ -72,6 +72,12 @@
                 <option value="other">Other</option>
               </select>
             </div>
+            <p class="legal-copy">
+              By creating an account, you automatically accept our
+              <button class="inline-link" id="termsLink" type="button">Terms & Conditions</button>
+              and acknowledge the
+              <button class="inline-link" id="manualLink" type="button">User Manual</button>.
+            </p>
             <button class="btn" id="signupBtn" type="submit">Create Account & Send OTP</button>
           </form>
         </div>
@@ -95,6 +101,48 @@
       </section>
     </section>
   </main>
+
+  <div class="modal-overlay hidden-block" id="legalModal">
+    <div class="modal-card legal-modal-card">
+      <div class="modal-head">
+        <div>
+          <div class="card-label">DermAI Policies</div>
+          <h3 id="legalModalTitle">Terms & Conditions</h3>
+        </div>
+        <button class="modal-close" id="legalModalClose" type="button" aria-label="Close dialog">x</button>
+      </div>
+
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-legal-tab="terms" type="button">Terms</button>
+        <button class="modal-tab" data-legal-tab="manual" type="button">Manual</button>
+      </div>
+
+      <div class="modal-body legal-modal-body">
+        <section id="legalTermsSection" class="legal-section">
+          <p class="legal-lead">Creating an account means you accept the operational terms below without a separate checkbox.</p>
+          <ul class="legal-list">
+            <li>You allow DermAI to store submitted skin images, prediction metadata, and optional feedback comments for model improvement and future retraining.</li>
+            <li>Your submitted images and account-linked data remain private to DermAI and are not intended to be shared with third parties as part of normal application usage.</li>
+            <li>This application is fully AI-driven and does not include manual dermatologist verification before showing a prediction.</li>
+            <li>Predictions, Grad-CAM explanations, and advisory notes are assistive outputs only and must not replace professional medical diagnosis.</li>
+            <li>You should upload only images you are authorized to share and avoid any content that violates privacy, safety, or applicable regulations.</li>
+          </ul>
+        </section>
+
+        <section id="legalManualSection" class="legal-section hidden-block">
+          <p class="legal-lead">User manual highlights for DermAI:</p>
+          <ol class="manual-list">
+            <li>Create an account, verify the OTP sent to your email, and log in to access the protected application.</li>
+            <li>Upload a dermoscopic image in JPG, PNG, or WebP format and start the analysis workflow.</li>
+            <li>Review the predicted class, risk badge, class confidence bars, Grad-CAM explanation, symptoms, advisory text, and medical disclaimer.</li>
+            <li>Submit thumbs up or thumbs down feedback and optionally leave a written comment to improve future system performance.</li>
+            <li>Use the profile section to review your account details and recent prediction history.</li>
+          </ol>
+          <a class="source-link manual-download-link" id="manualDownloadLink" href="#" target="_blank" rel="noreferrer">Open full User Manual</a>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <script src="config.js"></script>
   <script src="auth.js"></script>

@@ -220,6 +220,83 @@
   background: rgba(110, 231, 183, 0.06);
 }
 
+.legal-copy {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.inline-link {
+  border: none;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.inline-link:hover {
+  color: var(--accent2);
+}
+
+.legal-modal-card {
+  width: min(760px, 100%);
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.modal-tab {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modal-tab.active {
+  color: #0a0a0f;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.legal-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.legal-section {
+  color: var(--text);
+}
+
+.legal-lead {
+  color: var(--muted);
+  line-height: 1.7;
+  margin-bottom: 14px;
+}
+
+.legal-list,
+.manual-list {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  line-height: 1.7;
+}
+
+.manual-download-link {
+  margin-top: 18px;
+}
+
 @media (max-width: 920px) {
   .auth-shell {
     grid-template-columns: 1fr;

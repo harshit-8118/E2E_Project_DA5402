@@ -18,6 +18,8 @@
   const errorBox = document.getElementById("errorBox");
   const analyzeBtn = document.getElementById("analyzeBtn");
   const logoutBtn = document.getElementById("logoutBtn");
+  const profileBtn = document.getElementById("profileBtn");
+  const profileModal = document.getElementById("profileModal");
 
   function authHeaders(extra) {
     const headers = extra || {};
@@ -71,6 +73,14 @@
   function showError(message) {
     errorBox.textContent = "Error: " + message;
     errorBox.style.display = "block";
+  }
+
+  async function parseJson(res) {
+    try {
+      return await res.json();
+    } catch (error) {
+      return {};
+    }
   }
 
   function handleFile(file) {
@@ -182,6 +192,7 @@
     document.getElementById("thumbDown").className = "btn-feedback";
     document.getElementById("thumbUp").disabled = false;
     document.getElementById("thumbDown").disabled = false;
+    document.getElementById("feedbackComment").value = "";
     hide("feedbackThanks");
 
     show("results", "block");
@@ -192,6 +203,7 @@
     if (!currentPredictionId) {
       return;
     }
+    const comment = document.getElementById("feedbackComment").value.trim();
 
     document.getElementById("thumbUp").disabled = true;
     document.getElementById("thumbDown").disabled = true;
@@ -205,16 +217,103 @@
       const res = await fetch(API + "/feedback", {
         method: "POST",
         headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ prediction_id: currentPredictionId, vote: vote }),
+        body: JSON.stringify({
+          prediction_id: currentPredictionId,
+          vote: vote,
+          comment: comment,
+        }),
       });
       if (res.status === 401 || res.status === 403) {
         handleUnauthorized();
         return;
       }
+      if (!res.ok) {
+        const data = await parseJson(res);
+        throw new Error(data.detail || "Unable to save feedback.");
+      }
       show("feedbackThanks", "flex");
     } catch (error) {
+      document.getElementById("thumbUp").disabled = false;
+      document.getElementById("thumbDown").disabled = false;
+      showError(error.message || "Unable to save feedback.");
       return;
     }
+  }
+
+  function formatTimestamp(value) {
+    if (!value) {
+      return "-";
+    }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    return date.toLocaleString();
+  }
+
+  function renderPredictionHistory(predictions) {
+    const historyEl = document.getElementById("predictionHistory");
+    if (!predictions || predictions.length === 0) {
+      historyEl.innerHTML = '<p class="history-empty">No predictions available yet.</p>';
+      return;
+    }
+
+    historyEl.innerHTML = predictions.map(function (prediction) {
+      return (
+        '<article class="history-item">' +
+          '<div class="history-item-head">' +
+            '<strong>' + prediction.predicted_class + '</strong>' +
+            '<span class="risk-badge risk-' + prediction.risk_level + '">' + prediction.risk_level + " Risk</span>" +
+          "</div>" +
+          '<div class="history-item-meta">Confidence: ' + (Number(prediction.confidence || 0) * 100).toFixed(1) +
+          "% - " + formatTimestamp(prediction.timestamp) + "</div>" +
+        "</article>"
+      );
+    }).join("");
+  }
+
+  async function openProfileModal() {
+    try {
+      const responses = await Promise.all([
+        fetch(API + "/auth/me", { headers: authHeaders({}) }),
+        fetch(API + "/auth/my-predictions?limit=10", { headers: authHeaders({}) }),
+      ]);
+
+      for (let index = 0; index < responses.length; index += 1) {
+        if (responses[index].status === 401 || responses[index].status === 403) {
+          handleUnauthorized();
+          return;
+        }
+      }
+
+      const meRes = responses[0];
+      const predictionsRes = responses[1];
+      const meData = await parseJson(meRes);
+      const predictionData = await parseJson(predictionsRes);
+
+      if (!meRes.ok) {
+        throw new Error(meData.detail || "Unable to load profile.");
+      }
+      if (!predictionsRes.ok) {
+        throw new Error(predictionData.detail || "Unable to load prediction history.");
+      }
+
+      document.getElementById("profileUsername").textContent = meData.username || "-";
+      document.getElementById("profileEmail").textContent = meData.email || "-";
+      document.getElementById("profileGender").textContent = meData.gender || "-";
+      document.getElementById("profileVerified").textContent = meData.verified ? "Yes" : "No";
+      document.getElementById("profilePredictionCount").textContent = meData.prediction_count || 0;
+      document.getElementById("profileFeedbackCount").textContent = meData.feedback_count || 0;
+      renderPredictionHistory(predictionData.predictions || []);
+
+      profileModal.style.display = "flex";
+    } catch (error) {
+      showError(error.message || "Unable to load profile.");
+    }
+  }
+
+  function closeProfileModal() {
+    profileModal.style.display = "none";
   }
 
   function resetAll() {
@@ -263,6 +362,13 @@
   });
   document.getElementById("thumbDown").addEventListener("click", function () {
     submitFeedback("thumbs_down");
+  });
+  profileBtn.addEventListener("click", openProfileModal);
+  document.getElementById("profileModalClose").addEventListener("click", closeProfileModal);
+  profileModal.addEventListener("click", function (event) {
+    if (event.target === profileModal) {
+      closeProfileModal();
+    }
   });
   logoutBtn.addEventListener("click", handleUnauthorized);
 
