@@ -17,5 +17,5 @@ docker exec dermai-mongodb mongodump \
 
 docker cp "dermai-mongodb:/tmp/dump_${TIMESTAMP}" "${BACKUP_DIR}"
 
-echo "✅ Backup saved to ${BACKUP_DIR}"
+echo "   Backup saved to ${BACKUP_DIR}"
 echo "   Restore with: bash scripts/restore_mongodb.sh ${BACKUP_DIR}"

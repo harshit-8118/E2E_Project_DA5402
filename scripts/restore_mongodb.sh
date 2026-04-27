@@ -25,4 +25,4 @@ docker exec dermai-mongodb mongorestore \
   --drop \
   --quiet
 
-echo "✅ Restore complete from ${BACKUP_PATH}"
+echo "   Restore complete from ${BACKUP_PATH}"

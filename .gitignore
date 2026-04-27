@@ -2,7 +2,6 @@
 __pycache__/
 *.py[codz]
 *$py.class
-dag.svg
 # C extensions
 *.so
 /archived
@@ -34,8 +33,6 @@ requirements.txt
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
-HLD.png
-airflow_dag.png
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

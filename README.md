@@ -7,6 +7,25 @@
 [![MLflow](https://img.shields.io/badge/MLflow-DagsHub-orange)](https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow)
 [![Model](https://img.shields.io/badge/Model-EfficientNetB3%20%7C%20F1%3A0.7423-green)](https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow/#/experiments/0/runs/431cd8226fbe4250af9793e57b059ca5)
 
+**Project REPORT**:   `Project_reports\E2E_REPORT.pdf`
+**HLD REPORT**:   `Project_reports\HLD_DermAI.pdf`
+**LLD REPORT**:   `Project_reports\LLD_DermAI.pdf`
+**TestPlan REPORT**:   `Project_reports\TestPlan_DermAI.pdf`
+**USERMANUAL REPORT**:   `Project_reports\UserManual_DermAI.pdf`
+
+**RECORDING**:   `E2E_RECORDING.mp4`
+```bash
+[00:00 - 03:40] - docker compose discussion
+[03:41 - 06:12] - Codebase [monitoring, dockerization, and scripts] and Reports discussion
+[06:13 - 07:12] - Web UI & Application demonstration
+[07:13 - 07:55] - Grafana Dashboard discussion
+[08:00 - 09:05] - Airflow DAG pipeline & MLFLOW experiment
+[09:06 - 11:44] - Codebase [Preparation, backend-frontend, db, training, inference, and logging] discussion
+[11:45 - 12:50] - DVC and MLFLOW experiments run
+[12:50 - 13:30] - library requirements discussion & soft coding paths discussion
+[13:31 - 13:54] - MongoDB compass
+[13:55 - 14:10] - Conclusion
+```
 ---
 
 ## Architecture
@@ -14,7 +33,7 @@
 <!-- Insert HLD diagram image here -->
 > **HLD diagram:** `project_reports/HLD_DermAI.pdf`
 
-![alt text](HLD.png)
+![alt text](Project_reports/HLD.png)
 ---
 
 ## Quick Start (Docker)
@@ -144,7 +163,7 @@ dvc push               # sync data + model to DagsHub
 
 <!-- Insert DVC DAG image here -->
 > **DVC DAG image:** `project_reports/dvc_dag.png`  *(generated with `dvc dag --dot | dot -Tpng > dvc_dag.png`)*
-![alt text](dag.svg)
+![alt text](Project_reports/dag.svg)
 ---
 
 ## Model Serving
@@ -171,7 +190,7 @@ Schedule: `0 2 * * *` (2 AM nightly). Computes PSI, Jensen–Shannon divergence,
 
 <!-- Insert Airflow DAG image here -->
 > **DAG graph image:** `project_reports/airflow_dag.png`
-![airflow_dag.png](airflow_dag.png)
+![airflow_dag.png](Project_reports/airflow_dag.png)
 ```
 check_data_integrity
     ↓           ↓

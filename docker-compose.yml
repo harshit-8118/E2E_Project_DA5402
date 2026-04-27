@@ -315,29 +315,4 @@ services:
     depends_on:
       airflow-postgres:
         condition: service_healthy
-
-  # MongoDB Backup (manual trigger only)
-  # Usage: docker compose --profile backup run --rm mongodb-backup
-  mongodb-backup:
-    image: mongo:6.0.14
-    container_name: dermai-mongodb-backup
-    profiles:
-      - backup
-    volumes:
-      - mongodb_backup:/backup
-      - ./backups:/host_backup
-    command: >
-      bash -c "
-        mongodump
-          --uri=mongodb://mongodb:27017
-          --db=${MONGO_DB:-skin_disease_detection}
-          --out=/backup/dump_$(date +%Y%m%d_%H%M%S) &&
-        cp -r /backup/dump_* /host_backup/ &&
-        echo 'Backup complete — check ./backups/ folder'
-      "
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    networks:
-      - dermai_net
-    restart: "no"
+        
