@@ -8,9 +8,13 @@
 [![Model](https://img.shields.io/badge/Model-EfficientNetB3%20%7C%20F1%3A0.7423-green)](https://dagshub.com/da25s003/E2E_Project_DA5402.mlflow/#/experiments/0/runs/431cd8226fbe4250af9793e57b059ca5)
 
 **Project REPORT**:   `Project_reports\E2E_REPORT.pdf`
+
 **HLD REPORT**:   `Project_reports\HLD_DermAI.pdf`
+
 **LLD REPORT**:   `Project_reports\LLD_DermAI.pdf`
+
 **TestPlan REPORT**:   `Project_reports\TestPlan_DermAI.pdf`
+
 **USERMANUAL REPORT**:   `Project_reports\UserManual_DermAI.pdf`
 
 **RECORDING**:   `E2E_RECORDING.mp4`
